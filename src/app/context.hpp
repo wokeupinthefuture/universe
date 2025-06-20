@@ -19,10 +19,10 @@ struct Context
     RlImGuiSharedContext rlImgui;
 };
 
-inline void contextInit(Context& context)
+inline void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
 {
-    arenaInit(context.memory, Megabytes(64));
-    arenaInit(context.tempMemory, Megabytes(2));
+    arenaInit(context.memory, memorySize);
+    arenaInit(context.tempMemory, tempMemorySize);
 }
 
 inline void contextDeinit(Context& context)

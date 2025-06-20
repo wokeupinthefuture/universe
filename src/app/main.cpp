@@ -1,4 +1,5 @@
 #include <raylib.h>
+#include "lib/common.hpp"
 #include "lib/log.hpp"
 
 #include "platform_win32.hpp"
@@ -67,7 +68,7 @@ int main()
     AppState appState{};
 
     Context context{};
-    contextInit(context);
+    contextInit(context, Megabytes(4), Megabytes(4));
     defer({ contextDeinit(context); });
 
     SetConfigFlags(ConfigFlags::FLAG_VSYNC_HINT);

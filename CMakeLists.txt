@@ -10,15 +10,17 @@ include_directories("src")
 
 # app exe
 set(SOURCES "${CMAKE_SOURCE_DIR}/src/app/main.cpp" "${CMAKE_SOURCE_DIR}/src/app/platform_win32.cpp")
+message(STATUS "APP SOURCE FILES:")
 foreach (element ${SOURCES})
-    message(STATUS "including source file to build: ${element}")
+    message(STATUS "\t ${element}")
 endforeach ()
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # game dll
 set(GAME_SOURCES "${CMAKE_SOURCE_DIR}/src/game/game.cpp")
+message(STATUS "GAME SOURCE FILES:")
 foreach (element ${GAME_SOURCES})
-    message(STATUS "including game source file to build: ${element}")
+    message(STATUS "\t ${element}")
 endforeach ()
 add_library(game_${PROJECT_NAME} SHARED ${GAME_SOURCES})
 
@@ -58,8 +60,14 @@ function (link_dependency package_name library)
     target_link_libraries(game_${PROJECT_NAME} PRIVATE ${library})    
 endfunction()
 
+function (link_forked_dependency library)
+    add_subdirectory(third_party/${library})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${library})    
+    target_link_libraries(game_${PROJECT_NAME} PRIVATE ${library})
+endfunction()
+
+link_forked_dependency(raylib)
 link_dependency(glm glm::glm)
-link_dependency(raylib raylib)
 link_dependency(imgui imgui::imgui)
 
 #####################
