@@ -2,12 +2,8 @@
 #include "lib/common.hpp"
 #include "lib/log.hpp"
 
-#include "platform_win32.hpp"
-#include "rlgl.h"
-
-#define NO_FONT_AWESOME
+#include "rlImGui.h"
 #include "imgui.h"
-#include "third_party/rlImGui/rlImGui.cpp"
 
 #include "context.hpp"
 #include "platform.hpp"
@@ -36,6 +32,8 @@ struct GameCode
 
     decltype(&gameInit) init;
     decltype(&gameUpdate) update;
+    decltype(&gamePreHotReload) preHotReload;
+    decltype(&gamePostHotReload) postHotReload;
 };
 
 GameCode loadGameCode()
@@ -46,6 +44,8 @@ GameCode loadGameCode()
     game.dll = Platform::loadDll(GAME_DLL_NAME_TEMP);
     game.init = Platform_importDllFunc(game.dll, gameInit);
     game.update = Platform_importDllFunc(game.dll, gameUpdate);
+    game.preHotReload = Platform_importDllFunc(game.dll, gamePreHotReload);
+    game.postHotReload = Platform_importDllFunc(game.dll, gamePostHotReload);
     game.isLoaded = true;
     game.lastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
 
@@ -60,6 +60,9 @@ void unloadGameCode(GameCode& game)
         game.dll = nullptr;
     }
     game.update = nullptr;
+    game.preHotReload = nullptr;
+    game.postHotReload = nullptr;
+    game.init = nullptr;
     game.isLoaded = false;
 }
 
@@ -76,11 +79,6 @@ int main()
     DisableCursor();
 
     rlImGuiSetup(true);
-    context.rlImgui = RlImGuiSharedContext{
-        GlobalContext,
-        (void*)&rlImGuiBegin,
-        (void*)&rlImGuiEnd,
-    };
 
     char directory[256]{};
     Platform::getExeDirectory(directory);
@@ -103,10 +101,12 @@ int main()
         const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
         if (gameLastWrittenTime != game.lastWrittenTime)
         {
+            game.preHotReload((void*)&context);
             unloadGameCode(game);
             arenaFreeAll(context.memory);
             std::this_thread::sleep_for(1ms);
             game = loadGameCode();
+            game.postHotReload((void*)&context);
         }
 
         arenaFreeAll(context.tempMemory);

@@ -4,12 +4,7 @@
         {
             "name": "windows-x64",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_TARGET_TRIPLET": "x64-windows",
-                "VCPKG_MANIFEST_MODE": "OFF"
-            }
+            "binaryDir": "${sourceDir}/out/build/${presetName}"
         }
     ],
     "buildPresets": [

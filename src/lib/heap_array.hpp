@@ -6,9 +6,15 @@
 #include <cstdlib>
 #include <type_traits>
 
+#include "lib/common.hpp"
+
 #define TRIVIAL_TEMPLATE_T(t) \
     template <typename t>     \
         requires std::is_trivial_v<t>
+
+#define TRIVIAL_TEMPLATE_T1_T2(t1, t2)  \
+    template <typename t1, typename t2> \
+        requires std::is_trivial_v<t1> && std::is_trivial_v<t2>
 
 TRIVIAL_TEMPLATE_T(T)
 struct HeapArray
@@ -122,4 +128,10 @@ void arrayReserve(HeapArray<T>& array, size_t capacity)
     {
         std::fprintf(stderr, "array reserve cannot shrink");
     }
+}
+
+TRIVIAL_TEMPLATE_T(T)
+T* arrayLast(HeapArray<T> array)
+{
+    return array.data + array.size - 1;
 }

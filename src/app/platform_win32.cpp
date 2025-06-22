@@ -1,11 +1,12 @@
 #pragma once
 
-#include "platform_win32.hpp"
+#include "platform.hpp"
 #include "lib/log.hpp"
 
 #include <cstring>
 
 #define _WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 namespace Platform

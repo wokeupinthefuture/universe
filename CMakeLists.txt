@@ -4,7 +4,10 @@ project(universe LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/")
+
+set(binary_dir "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${binary_dir})
+# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${binary_dir})
 
 include_directories("src")
 
@@ -45,7 +48,6 @@ if(MSVC)
             /Zi
         >
 
-        # Release config
         $<$<CONFIG:Release>:
             /O2
         >)
@@ -54,25 +56,46 @@ if(MSVC)
     target_compile_options(game_${PROJECT_NAME} PRIVATE ${COMMON_COMPILER_FLAGS})
 endif()
 
-function (link_dependency package_name library)
-    find_package(${package_name} CONFIG REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${library})    
-    target_link_libraries(game_${PROJECT_NAME} PRIVATE ${library})    
-endfunction()
-
-function (link_forked_dependency library)
+# dependencies
+function (use_local_dependency library)
     add_subdirectory(third_party/${library})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${library})    
     target_link_libraries(game_${PROJECT_NAME} PRIVATE ${library})
 endfunction()
 
-link_forked_dependency(raylib)
-link_dependency(glm glm::glm)
-link_dependency(imgui imgui::imgui)
+function (use_shared_lib lib)
+    set(lib_PATH "third_party/${lib}")
+    file(GLOB lib_SOURCES ${lib_PATH}/*.cpp)
 
-#####################
-# post-build events #
-#####################
+    add_library(${lib} SHARED ${lib_SOURCES})
+
+    include_directories(PUBLIC ${lib_PATH})
+    # set_target_properties(${lib} PROPERTIES
+    #     RUNTIME_OUTPUT_DIRECTORY ${binary_dir}
+    #     ARCHIVE_OUTPUT_DIRECTORY ${binary_dir}
+    #     LIBRARY_OUTPUT_DIRECTORY ${binary_dir}
+    # )
+
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${lib})
+    target_link_libraries(game_${PROJECT_NAME} PUBLIC ${lib})
+endfunction()
+
+set(BUILD_SHARED_LIBS ON)
+set(RAYLIB_BUILD_LIBRARY ON)
+use_local_dependency(raylib)
+
+use_shared_lib(rlImGui)
+use_shared_lib(imgui)
+
+target_include_directories(rlImGui PUBLIC third_party/raylib/src)
+target_link_libraries(rlImGui PUBLIC imgui raylib)
+target_compile_definitions(rlImGui PUBLIC BUILD_LIBTYPE_SHARED)
+
+set(BUILD_SHARED_LIBS OFF)
+
+use_local_dependency(glm)
+
+# post-build events 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/resources/ $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
