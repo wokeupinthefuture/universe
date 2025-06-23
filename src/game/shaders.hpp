@@ -1,12 +1,13 @@
 #pragma once
 
+#if 0
 #include "raylib.h"
 #include "rlgl.h"
 #include "lib/heap_array.hpp"
 #include "app/memory.hpp"
 #include "lib/log.hpp"
 
-#define LOAD_SHADER_FROM_SOURCE false
+#define LOAD_SHADER_FROM_SOURCE true
 #include "shaders/light.hpp"
 #include "shaders/basic.hpp"
 
@@ -188,12 +189,14 @@ inline void debugDrawUniform(ShaderEx shader, ShaderUniform uniform)
         ImGui::Text("%s", uniform.name);
         ImGui::SameLine();
         auto currentValue = getShaderUniform<float>(shader.base, uniform.location);
-        if (ImGui::DragFloat(uniform.name, &currentValue, 0.01f))
-        {
-            SetShaderValue(shader.base, uniform.location, &currentValue, SHADER_UNIFORM_FLOAT);
-        }
+        // if (ImGui::DragFloat(uniform.name, &currentValue, 0.01f))
+        // {
+        //     SetShaderValue(shader.base, uniform.location, &currentValue, SHADER_UNIFORM_FLOAT);
+        // }
     }
-    else if (uniform.type == SHADER_UNIFORM_INT)
+
+    return;
+    if (uniform.type == SHADER_UNIFORM_INT)
     {
         ImGui::Text("%s", uniform.name);
         ImGui::SameLine();
@@ -259,3 +262,4 @@ inline void debugDrawShader(ShaderEx shader, const char* ownerName)
     }
     ImGui::Separator();
 }
+#endif

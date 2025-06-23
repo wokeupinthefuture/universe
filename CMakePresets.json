@@ -11,7 +11,8 @@
         {
             "name": "Debug",
             "configurePreset": "windows-x64",
-            "configuration": "Debug"
+            "configuration": "Debug",
+            "jobs": 8
         }
     ]
 }

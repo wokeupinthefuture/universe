@@ -38,3 +38,24 @@ using u64 = std::uint64_t;
 #define Kilobytes(count) ((count) * 1024)
 #define Megabytes(count) (Kilobytes(count) * 1024)
 #define Gigabytes(count) (Megabytes(count) * 1024)
+
+#define setBit(number, bit) (number) | (1 << bit)
+#define clearBit(number, bit) (number) & ~(1 << bit)
+#define checkBit(number, bit) ((number) >> bit) & 1
+
+#include <cmath>
+#include "glm/detail/qualifier.hpp"
+#include "glm/vec2.hpp"
+#include "glm/vec3.hpp"
+#include "glm/vec4.hpp"
+#include "glm/gtc/epsilon.hpp"
+#include "glm/common.hpp"
+#include "glm/trigonometric.hpp"
+#include "glm/geometric.hpp"
+#include "glm/vec2.hpp"
+#include "glm/vec2.hpp"
+#include "glm/vec2.hpp"
+#include "glm/vec2.hpp"
+#include "glm/vec2.hpp"
+
+using namespace glm;

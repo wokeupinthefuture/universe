@@ -10,7 +10,7 @@ static constexpr auto fs = "resources/shaders/light.fs";
 
 #else
 
-static constexpr auto vs = R"(
+static constexpr auto fs = R"(
 #version 330
 
 in vec3 fragPos;
@@ -44,10 +44,10 @@ void main()
 
     vec3 result = (ambientColor + diffuseColor + specularColor) * fragColor.xyz;
 
-    finalColor = vec4(result, 1.0);
+    finalColor = vec4(1.0, 0.1, 0.7, 1.0);
 })";
 
-static constexpr auto fs = R"(#version 330
+static constexpr auto vs = R"(#version 330
 
 // Input vertex attributes
 in vec3 vertexPosition;

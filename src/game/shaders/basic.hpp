@@ -10,7 +10,7 @@ static constexpr auto fs = "resources/shaders/basic.fs";
 
 #else
 
-static constexpr auto vs = R"(
+static constexpr auto fs = R"(
 #version 330
 
 // Input vertex attributes (from vertex shader)
@@ -29,7 +29,7 @@ void main()
     finalColor = vec4(color, 1.0);
 })";
 
-static constexpr auto fs = R"(
+static constexpr auto vs = R"(
 #version 330
 
 // Input vertex attributes

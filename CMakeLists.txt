@@ -7,7 +7,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(binary_dir "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${binary_dir})
-# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${binary_dir})
 
 include_directories("src")
 
@@ -70,27 +69,13 @@ function (use_shared_lib lib)
     add_library(${lib} SHARED ${lib_SOURCES})
 
     include_directories(PUBLIC ${lib_PATH})
-    # set_target_properties(${lib} PROPERTIES
-    #     RUNTIME_OUTPUT_DIRECTORY ${binary_dir}
-    #     ARCHIVE_OUTPUT_DIRECTORY ${binary_dir}
-    #     LIBRARY_OUTPUT_DIRECTORY ${binary_dir}
-    # )
 
     target_link_libraries(${PROJECT_NAME} PUBLIC ${lib})
     target_link_libraries(game_${PROJECT_NAME} PUBLIC ${lib})
 endfunction()
 
 set(BUILD_SHARED_LIBS ON)
-set(RAYLIB_BUILD_LIBRARY ON)
-use_local_dependency(raylib)
-
-use_shared_lib(rlImGui)
 use_shared_lib(imgui)
-
-target_include_directories(rlImGui PUBLIC third_party/raylib/src)
-target_link_libraries(rlImGui PUBLIC imgui raylib)
-target_compile_definitions(rlImGui PUBLIC BUILD_LIBTYPE_SHARED)
-
 set(BUILD_SHARED_LIBS OFF)
 
 use_local_dependency(glm)

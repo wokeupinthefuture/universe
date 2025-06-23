@@ -1,3 +1,5 @@
+#if 0
+
 #include "game.hpp"
 #include "lib/common.hpp"
 #include "lib/log.hpp"
@@ -93,14 +95,6 @@ struct GameState
 
 internal void restart(GameState& gameState, Arena& tempArena)
 {
-    static constexpr auto cameraOffset = 10.f;
-
-    gameState.camera.fovy = 60.f;
-    gameState.camera.position = {0, cameraOffset * 0.5f, -cameraOffset};
-    gameState.camera.target = {0, 0, 0.f};
-    gameState.camera.up = {0, 1.f, 0};
-    gameState.camera.projection = CAMERA_PERSPECTIVE;
-
     if (gameState.isInitialized)
     {
         deinitShader(gameState.basicShader);
@@ -121,6 +115,14 @@ void gameInit(void* contextPtr)
     GameState& gameState = *(GameState*)context.memory.buffer;
 
     gameState.isInitialized = true;
+
+    static constexpr auto cameraOffset = 10.f;
+
+    gameState.camera.fovy = 60.f;
+    gameState.camera.position = {0, cameraOffset * 0.5f, -cameraOffset};
+    gameState.camera.target = {0, 0, 0.f};
+    gameState.camera.up = {0, 1.f, 0};
+    gameState.camera.projection = CAMERA_PERSPECTIVE;
 
     gameState.sphere = createSphere();
     gameState.cube = createCube();
@@ -173,3 +175,4 @@ void gameUpdate(void* contextPtr)
     gameState.sphere.eulerAngles.z += GetFrameTime();
     gameState.cube.eulerAngles.z += GetFrameTime();
 }
+#endif

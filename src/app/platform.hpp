@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lib/common.hpp"
+#include "input.hpp"
 
 #define PLATFORM_WIN32 0
 #define PLATFORM_TYPE PLATFORM_WIN32
@@ -12,6 +13,15 @@
 namespace Platform
 {
 
+using Window = void*;
+Window openWindow(int width, int height, const char* name);
+void closeWindow(Window window);
+
+inline bool windowShouldClose;
+
+void pollEvents();
+void swapBuffers();
+
 // memory
 void* allocMemory(size_t size);
 void freeMemory(void* addr, size_t size);
@@ -21,11 +31,9 @@ void getExeDirectory(char* path);
 u64 getFileLastWrittenTime(const char* fileName);
 void copyFile(const char* src, const char* dst);
 
-void* loadDll(const char* dllName);
-void unloadDll(void* dll);
-
-void* importDllFunc(void* dll, const char* funcName);
-
-#define Platform_importDllFunc(dll, funcName) decltype (&funcName)(Platform::importDllFunc((dll), (#funcName)))
+void* loadDynamicLib(const char* dllName);
+void unloadDynamicLib(void* lib);
+void* loadDynamicFunc(void* dll, const char* funcName);
+#define Platform_loadDynamicFunc(lib, funcName) decltype (&funcName)(Platform::loadDynamicFunc((lib), (#funcName)))
 
 }  // namespace Platform
