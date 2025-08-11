@@ -11,11 +11,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${binary_dir})
 include_directories("src")
 
 # app exe
-set(SOURCES "${CMAKE_SOURCE_DIR}/src/app/main.cpp" "${CMAKE_SOURCE_DIR}/src/app/platform_win32.cpp")
+set(SOURCES 
+    "${CMAKE_SOURCE_DIR}/src/app/main.cpp"
+     "${CMAKE_SOURCE_DIR}/src/app/platform_win32.cpp"
+     "${CMAKE_SOURCE_DIR}/src/app/renderer_dx11.cpp"
+     )
 message(STATUS "APP SOURCE FILES:")
 foreach (element ${SOURCES})
     message(STATUS "\t ${element}")
 endforeach ()
+
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # game dll
@@ -29,6 +34,7 @@ add_library(game_${PROJECT_NAME} SHARED ${GAME_SOURCES})
 # defines
 add_compile_definitions(PROJECT_NAME="${PROJECT_NAME}")
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+add_compile_definitions(_MBCS)
 
 # flags
 string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -79,6 +85,9 @@ use_shared_lib(imgui)
 set(BUILD_SHARED_LIBS OFF)
 
 use_local_dependency(glm)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC d3d11)
+target_link_libraries(${PROJECT_NAME} PUBLIC d3dcompiler)
 
 # post-build events 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

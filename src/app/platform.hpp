@@ -8,6 +8,26 @@
 
 #if PLATFORM_TYPE == PLATFORM_WIN32
 #define GAME_API __declspec(dllexport)
+#define HR_ASSERT(expr)                                                           \
+    do                                                                            \
+    {                                                                             \
+        const auto result = expr;                                                 \
+        if (FAILED(result))                                                       \
+        {                                                                         \
+            _logVerbose = true;                                                   \
+            logError("platform call failed: " #expr ", hresult: 0x%08x", result); \
+            _logVerbose = false;                                                  \
+            assert(false);                                                        \
+        }                                                                         \
+    } while (0)
+#define LOGIC_ERROR()             \
+    do                            \
+    {                             \
+        _logVerbose = true;       \
+        logError("logic error!"); \
+        _logVerbose = false;      \
+        assert(false);            \
+    } while (0)
 #endif
 
 namespace Platform

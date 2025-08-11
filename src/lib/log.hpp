@@ -3,10 +3,9 @@
 #include <cstdio>
 #include <ctime>
 
-// #define LOG_VERBOSE
-
 inline const char* _logFile = nullptr;
 inline int _logLine = 0;
+inline bool _logVerbose = false;
 
 #define logInfo(msg, ...)           \
     do                              \
@@ -31,14 +30,16 @@ void _logInfo(const char* message, Args... args)
     char seconds[256];
     std::sprintf(seconds, localtime->tm_sec > 9 ? "%i" : "0%i", localtime->tm_sec);
 
-#if defined LOG_VERBOSE
-    std::sprintf(
-        buffer.data, "[%s:%s:%s][Info][%s:%i] %s\n", hours.data, minutes.data, seconds.data, _logFile, _logLine, message);
-    std::printf(buffer.data, args...);
-#else
-    std::sprintf(buffer, "%s\n", message);
-    std::printf(buffer, args...);
-#endif
+    if (_logVerbose)
+    {
+        std::sprintf(buffer, "[%s:%s:%s][Info][%s:%i] %s\n", hours, minutes, seconds, _logFile, _logLine, message);
+        std::printf(buffer, args...);
+    }
+    else
+    {
+        std::sprintf(buffer, "%s\n", message);
+        std::printf(buffer, args...);
+    }
 }
 
 #define logError(msg, ...)           \
@@ -64,12 +65,14 @@ void _logError(const char* message, Args... args)
     char seconds[256];
     std::sprintf(seconds, localtime->tm_sec > 9 ? "%i" : "0%i", localtime->tm_sec);
 
-#if defined LOG_VERBOSE
-    std::sprintf(
-        buffer.data, "[%s:%s:%s][Error][%s:%i] %s\n", hours.data, minutes.data, seconds.data, _logFile, _logLine, message);
-    std::printf(buffer.data, args...);
-#else
-    std::sprintf(buffer, "%s\n", message);
-    std::printf(buffer, args...);
-#endif
+    if (_logVerbose)
+    {
+        std::sprintf(buffer, "[%s:%s:%s][Error][%s:%i] %s\n", hours, minutes, seconds, _logFile, _logLine, message);
+        std::printf(buffer, args...);
+    }
+    else
+    {
+        std::sprintf(buffer, "%s\n", message);
+        std::printf(buffer, args...);
+    }
 }

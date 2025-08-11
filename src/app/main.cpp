@@ -8,8 +8,10 @@
 #include "platform.hpp"
 #include "game/game.hpp"
 #include "input.hpp"
+#include "renderer.hpp"
 
 #include <thread>
+#include <chrono>
 
 using namespace std::chrono_literals;
 
@@ -80,21 +82,29 @@ int main()
     sprintf(gameCodeRealPath, "%s%s", directory, GAME_DLL_NAME);
     sprintf(gameCodeTempPath, "%s%s", directory, GAME_DLL_NAME_TEMP);
 
-    appState.window = Platform::openWindow(1280, 720, PROJECT_NAME);
+    const auto windowSize = vec2(1280, 720);
+    appState.window = Platform::openWindow(windowSize.x, windowSize.y, PROJECT_NAME);
     defer({ Platform::closeWindow(appState.window); });
+
+    Renderer::init(appState.window, windowSize.x, windowSize.y);
+    defer({ Renderer::deinit(); });
 
     auto game = loadGameCode();
 
+    Renderer::addDrawCommand({.mesh = Renderer::Mesh::Triangle, .shader = Renderer::ShaderType::Basic});
+
     // game.init((void*)&context);
 
-    while (!Platform::windowShouldClose && appState.isRunning)
+    using namespace Platform;
+    using namespace Renderer;
+    while (!windowShouldClose && appState.isRunning)
     {
-        Platform::pollEvents();
+        pollEvents();
 
-        if (Platform::isKeyPressed(Platform::KeyboardKey::KEY_ESCAPE))
+        if (isKeyPressed(KeyboardKey::KEY_ESCAPE))
             appState.isRunning = false;
 
-        const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
+        const auto gameLastWrittenTime = getFileLastWrittenTime(gameCodeRealPath);
         if (gameLastWrittenTime != game.lastWrittenTime)
         {
             // game.preHotReload((void*)&context);
@@ -105,6 +115,17 @@ int main()
             // game.postHotReload((void*)&context);
         }
 
+        memset(inputState.keyboard, 0);
+        inputState.mouse.leftState = ButtonState::Idle;
+        inputState.mouse.rightState = ButtonState::Idle;
+        inputState.mouse.pos = {};
+
         arenaFreeAll(context.tempMemory);
+
+        static vec4 clearColor{0, 0, 0, 1};
+        clear(clearColor);
+        for (const auto& command : drawCommands)
+            draw(command);
+        present();
     }
 }

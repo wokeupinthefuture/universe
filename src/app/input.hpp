@@ -126,6 +126,7 @@ struct InputState
         ButtonState leftState;
         ButtonState rightState;
         vec2 pos;
+        bool isCaptured;
     } mouse;
 
     ButtonState keyboard[(int)Platform::KeyboardKey::KEY_MAX];

@@ -59,3 +59,11 @@ using u64 = std::uint64_t;
 #include "glm/vec2.hpp"
 
 using namespace glm;
+
+template <typename T>
+void memset(T& memory, int value)
+{
+    std::memset((void*)&memory, value, sizeof(T));
+}
+
+#define ARR_LENGTH(arr) sizeof(arr) / sizeof(arr[0])

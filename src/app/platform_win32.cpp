@@ -231,24 +231,28 @@ static KeyboardKey translateKeyMapping(int vkKey)
         default: return KeyboardKey::KEY_UNKNOWN;
     }
 }
-static auto windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
+static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
     switch (uMsg)
     {
-        case WM_MBUTTONDOWN:
+        case WM_RBUTTONDOWN:
         {
-            if (wParam == MK_LBUTTON)
-                inputState.mouse.leftState = ButtonState::Pressed;
-            else if (wParam == MK_RBUTTON)
-                inputState.mouse.rightState = ButtonState::Pressed;
+            inputState.mouse.rightState = ButtonState::Pressed;
             break;
         }
-        case WM_MBUTTONUP:
+        case WM_RBUTTONUP:
         {
-            if (wParam == MK_LBUTTON)
-                inputState.mouse.leftState = ButtonState::Released;
-            else if (wParam == MK_RBUTTON)
-                inputState.mouse.rightState = ButtonState::Released;
+            inputState.mouse.rightState = ButtonState::Released;
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        {
+            inputState.mouse.leftState = ButtonState::Pressed;
+            break;
+        }
+        case WM_LBUTTONUP:
+        {
+            inputState.mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -265,8 +269,16 @@ static auto windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -
         }
         case WM_MOUSEMOVE:
         {
+            // if (!inputState.mouse.isCaptured)
+            // SetCapture(hwnd);
             inputState.mouse.pos.x = (float)GET_X_LPARAM(lParam);
             inputState.mouse.pos.y = (float)GET_Y_LPARAM(lParam);
+            break;
+        }
+        case WM_KILLFOCUS:
+        {
+            // if (inputState.mouse.isCaptured)
+            //    ReleaseCapture();
             break;
         }
 
@@ -276,14 +288,18 @@ static auto windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -
             windowShouldClose = true;
             break;
         }
+
+        default:
+        {
+            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+        }
     }
 
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    return 0;
 };
 
 Window openWindow(int width, int height, const char* name)
 {
-
     const HINSTANCE hInst = GetModuleHandle(nullptr);
 
     WNDCLASSEX wc{};
@@ -323,7 +339,7 @@ void closeWindow(Window window)
 void pollEvents()
 {
     MSG message{};
-    while (PeekMessage(&message, nullptr, 0, 0, TRUE))
+    while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&message);
         DispatchMessage(&message);
