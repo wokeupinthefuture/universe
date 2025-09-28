@@ -1,7 +1,9 @@
 #include "app/platform.hpp"
+#include "lib/utils.hpp"
 #include "renderer.hpp"
 #include <d3d11.h>
 #include <d3dcompiler.h>
+#include <algorithm>
 
 #include "game/shaders/dx11/basic.hpp"
 #include "lib/log.hpp"
@@ -11,10 +13,44 @@ namespace Renderer
 
 ID3D11Device* device;
 IDXGISwapChain* swapChain;
-ID3D11DeviceContext* context;
+ID3D11DeviceContext* deviceContext;
 ID3D11RenderTargetView* rtView;
 
-ID3D11Buffer* vertexBuffers[Mesh::Max] = {nullptr, nullptr};
+ID3D11Buffer* vertexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
+
+struct BasicVSConstantBuffer
+{
+    mat4 mvp;
+};
+struct BasicPSConstantBuffer
+{
+    vec4 color;
+};
+
+enum class ConstantBufferType
+{
+    VertexShader,
+    PixelShader
+};
+
+static constexpr auto MAX_CONSTANT_BUFFER_MAPPINGS = 5;
+
+struct ConstantBufferFieldMapping
+{
+    const char* name;
+    ConstantBufferType bufferType;
+    size_t offsetBytes;
+    size_t sizeBytes;
+};
+
+struct ConstantBuffer
+{
+    ID3D11Buffer* vsBuffer;
+    ID3D11Buffer* psBuffer;
+    ConstantBufferFieldMapping mappings[MAX_CONSTANT_BUFFER_MAPPINGS];
+};
+
+ConstantBuffer constantBuffers[(i32)ShaderType::Max] = {};
 
 struct Shader
 {
@@ -23,7 +59,7 @@ struct Shader
     ID3D11InputLayout* layout;
 };
 
-Shader shaders[2] = {};
+Shader shaders[(i32)ShaderType::Max] = {};
 
 static ID3DBlob* compileShader(const char* src, const char* target)
 {
@@ -92,7 +128,6 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, int vertexCount)
     bd.MiscFlags = 0;
 
     D3D11_SUBRESOURCE_DATA sd = {};
-
     bd.StructureByteStride = sizeof(Vertex);
     bd.ByteWidth = sizeof(Vertex) * vertexCount;
     sd.pSysMem = vertices;
@@ -100,6 +135,26 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, int vertexCount)
     HR_ASSERT(device->CreateBuffer(&bd, &sd, &buffer));
 
     return buffer;
+}
+
+static ID3D11Buffer* createConstantBuffer(ShaderType shaderType, D3D11_USAGE usage)
+{
+    ID3D11Buffer* constantBuffer = nullptr;
+
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.Usage = usage;
+    switch (shaderType)
+    {
+        case ShaderType::Basic: cbDesc.ByteWidth = sizeof(BasicVSConstantBuffer); break;
+        default: LOGIC_ERROR();
+    }
+    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    if (usage == D3D11_USAGE_DYNAMIC)
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    device->CreateBuffer(&cbDesc, nullptr, &constantBuffer);
+
+    return constantBuffer;
 }
 
 void init(Platform::Window window, float windowWidth, float windowHeight)
@@ -126,14 +181,14 @@ void init(Platform::Window window, float windowWidth, float windowHeight)
         &swapChain,
         &device,
         nullptr,
-        &context));
+        &deviceContext));
 
     ID3D11Resource* backbuffer{};
+    defer({ backbuffer->Release(); });
     HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), (void**)&backbuffer));
     HR_ASSERT(device->CreateRenderTargetView(backbuffer, nullptr, &rtView));
-    backbuffer->Release();
 
-    context->OMSetRenderTargets(1, &rtView, nullptr);
+    deviceContext->OMSetRenderTargets(1, &rtView, nullptr);
 
     D3D11_VIEWPORT vp{};
     vp.TopLeftX = 0;
@@ -142,19 +197,36 @@ void init(Platform::Window window, float windowWidth, float windowHeight)
     vp.Height = windowHeight;
     vp.MinDepth = 0.f;
     vp.MaxDepth = 1.f;
-    context->RSSetViewports(1, &vp);
+    deviceContext->RSSetViewports(1, &vp);
 
-    vertexBuffers[Mesh::Triangle] = createVertexBuffer(TRIANGLE_VERTICES, ARR_LENGTH(TRIANGLE_VERTICES));
-    vertexBuffers[Mesh::Quad] = createVertexBuffer(QUAD_VERTICES, ARR_LENGTH(QUAD_VERTICES));
+    vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(TRIANGLE_VERTICES, ARR_LENGTH(TRIANGLE_VERTICES));
+    vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(QUAD_VERTICES, ARR_LENGTH(QUAD_VERTICES));
 
     const u32 strides[] = {
         (u32)sizeof(Vertex),
         (u32)sizeof(Vertex),
     };
     const u32 offsets[] = {0, 0};
-    context->IASetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
+    deviceContext->IASetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
 
-    shaders[0] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
+    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+    dsDesc.DepthEnable = true;
+    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;  // Important: use LESS for depth testing
+
+    shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
+    constantBuffers[(i32)ShaderType::Basic] = {.vsBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
+        .psBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
+        .mappings = {
+            {.name = "mvp",
+                .bufferType = ConstantBufferType::VertexShader,
+                .offsetBytes = offsetof(BasicVSConstantBuffer, mvp),
+                .sizeBytes = sizeof(mat4)},
+            {.name = "color",
+                .bufferType = ConstantBufferType::PixelShader,
+                .offsetBytes = offsetof(BasicPSConstantBuffer, color),
+                .sizeBytes = sizeof(vec4)},
+        }};
 }
 
 void deinit()
@@ -163,38 +235,31 @@ void deinit()
         device->Release();
     if (swapChain)
         swapChain->Release();
-    if (context)
-        context->Release();
+    if (deviceContext)
+        deviceContext->Release();
     if (rtView)
         rtView->Release();
-
-    arrayFree(drawCommands);
-}
-
-void addDrawCommand(DrawCommand command)
-{
-    arrayPush(drawCommands, command);
 }
 
 void draw(DrawCommand const& command)
 {
-    context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    deviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     switch (command.shader)
     {
         case ShaderType::Basic:
-            context->IASetInputLayout(shaders[0].layout);
-            context->VSSetShader(shaders[0].vs, nullptr, 0);
-            context->PSSetShader(shaders[0].ps, nullptr, 0);
+            deviceContext->IASetInputLayout(shaders[0].layout);
+            deviceContext->VSSetShader(shaders[0].vs, nullptr, 0);
+            deviceContext->PSSetShader(shaders[0].ps, nullptr, 0);
             break;
 
         default: LOGIC_ERROR();
     }
 
-    switch (command.mesh.type)
+    switch (command.mesh)
     {
-        case Mesh::Triangle: context->Draw(ARR_LENGTH(TRIANGLE_VERTICES), 0); break;
-        case Mesh::Quad: context->Draw(ARR_LENGTH(QUAD_VERTICES), 0); break;
+        case MeshType::Triangle: deviceContext->Draw(ARR_LENGTH(TRIANGLE_VERTICES), 0); break;
+        case MeshType::Quad: deviceContext->Draw(ARR_LENGTH(QUAD_VERTICES), 0); break;
 
         default: LOGIC_ERROR();
     }
@@ -202,12 +267,112 @@ void draw(DrawCommand const& command)
 
 void clear(glm::vec4 color)
 {
-    context->ClearRenderTargetView(rtView, &color.x);
+    deviceContext->ClearRenderTargetView(rtView, &color.x);
 }
 
 void present()
 {
     swapChain->Present(1, 0);
+}
+
+static void setShaderVariable(ShaderType shader, const char* variableName, void* value)
+{
+    if (shader >= ShaderType::Max)
+        LOGIC_ERROR();
+
+    auto buffers = constantBuffers[(i32)shader];
+
+    const auto mapping = std::find_if(buffers.mappings,
+        buffers.mappings + ARR_LENGTH(buffers.mappings),
+        [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
+    ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
+
+    const auto buffer = mapping->bufferType == ConstantBufferType::VertexShader ? buffers.vsBuffer : buffers.psBuffer;
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HR_ASSERT(deviceContext->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+    const auto data = (uint8_t*)mappedResource.pData;
+    memcpy(data + mapping->offsetBytes, value, mapping->sizeBytes);
+
+    deviceContext->Unmap(buffer, 0);
+    if (mapping->bufferType == ConstantBufferType::VertexShader)
+        deviceContext->VSSetConstantBuffers(0, 1, &buffer);
+    else
+        deviceContext->PSSetConstantBuffers(1, 1, &buffer);
+}
+
+void setShaderVariableInt(ShaderType shader, const char* variableName, int value)
+{
+    setShaderVariable(shader, variableName, &value);
+}
+
+void setShaderVariableFloat(ShaderType shader, const char* variableName, float value)
+{
+    setShaderVariable(shader, variableName, &value);
+}
+
+void setShaderVariableVec2(ShaderType shader, const char* variableName, vec2 value)
+{
+    setShaderVariable(shader, variableName, &value.x);
+}
+
+void setShaderVariableVec3(ShaderType shader, const char* variableName, vec3 value)
+{
+    setShaderVariable(shader, variableName, &value.x);
+}
+
+void setShaderVariableVec4(ShaderType shader, const char* variableName, vec4 value)
+{
+    setShaderVariable(shader, variableName, &value.x);
+}
+
+void setShaderVariableMat4(ShaderType shader, const char* variableName, mat4 value)
+{
+    setShaderVariable(shader, variableName, &value[0][0]);
+}
+
+mat4 getShaderVariableMat4(ShaderType shader, const char* variableName)
+{
+    if (shader >= ShaderType::Max)
+        LOGIC_ERROR();
+
+    auto buffers = constantBuffers[(i32)shader];
+
+    const auto mapping = std::find_if(buffers.mappings,
+        buffers.mappings + ARR_LENGTH(buffers.mappings),
+        [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
+    ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
+
+    const auto buffer = mapping->bufferType == ConstantBufferType::VertexShader ? buffers.vsBuffer : buffers.psBuffer;
+
+    // Create a staging buffer to read the constant buffer
+    D3D11_BUFFER_DESC cbDesc;
+    buffer->GetDesc(&cbDesc);
+
+    D3D11_BUFFER_DESC stagingDesc = cbDesc;
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.BindFlags = 0;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+    ID3D11Buffer* stagingBuffer = nullptr;
+    HR_ASSERT(device->CreateBuffer(&stagingDesc, nullptr, &stagingBuffer));
+
+    // Copy constant buffer to staging buffer
+    deviceContext->CopyResource(stagingBuffer, buffer);
+
+    // Map the staging buffer to read data
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HR_ASSERT(deviceContext->Map(stagingBuffer, 0, D3D11_MAP_READ, 0, &mappedResource));
+
+    // Read the matrix data (assuming mat4)
+    glm::mat4 matrix;
+    memcpy(&matrix, mappedResource.pData, sizeof(glm::mat4));
+
+    // Unmap and release staging buffer
+    deviceContext->Unmap(stagingBuffer, 0);
+    stagingBuffer->Release();
+
+    return matrix;
 }
 
 }  // namespace Renderer

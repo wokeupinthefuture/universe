@@ -19,9 +19,11 @@
 TRIVIAL_TEMPLATE_T(T)
 struct HeapArray
 {
-    T* data{};
-    size_t size{};
-    size_t capacity{};
+    T* data;
+    size_t size;
+    size_t capacity;
+
+    HeapArray() = default;
 
     const T* begin() const { return data; }
     const T* end() const { return data + size; }

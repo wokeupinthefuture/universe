@@ -45,7 +45,8 @@ TRIVIAL_TEMPLATE_KV(K, V)
 void mapAlloc(HashMap<K, V>& map, size_t capacity = INITIAL_CAPACITY)
 {
     capacity = capacity == 0 ? 1 : capacity;
-    map.entries = (typename HashMap<K, V>::Entry*)std::calloc(capacity, sizeof(HashMap<K, V>::Entry));
+    map.entries = (typename HashMap<K, V>::Entry*)std::malloc(capacity);
+    memset(map.entries, sizeof(HashMap<K, V>::Entry), 0);
     map.size = 0;
     map.capacity = capacity;
 }

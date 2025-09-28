@@ -5,6 +5,11 @@ namespace Shaders::Basic
 
 static constexpr auto vs = R"(
 
+    cbuffer BasicVSConstantBuffer : register(b0)
+    {
+        float4x4 mvp;
+    };
+
     struct VSInput
     {
         float3 pos : POSITION;
@@ -18,17 +23,21 @@ static constexpr auto vs = R"(
     VSOutput main(VSInput input)
     {
         VSOutput output;
-        output.pos = float4(input.pos, 1.0f);
+        output.pos = mul(float4(input.pos, 1.0f), mvp);
         return output; 
     }
 
     )";
 
 static constexpr auto fs = R"(
+    cbuffer BasicPSConstantBuffer : register(b1)
+    {
+        float4 color;
+    };
 
     float4 main() : SV_TARGET
     {
-        return float4(1.0f, 1.0f, 1.0f, 1.0f);
+        return color;
     }
 
     )";

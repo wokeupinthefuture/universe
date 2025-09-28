@@ -114,8 +114,9 @@ enum KeyboardKey
 
 enum ButtonState
 {
-    Idle,
+    NotPressed,
     Pressed,
+    Holding,
     Released
 };
 
@@ -130,11 +131,14 @@ struct InputState
     } mouse;
 
     ButtonState keyboard[(int)Platform::KeyboardKey::KEY_MAX];
+    ButtonState prevKeyboard[(int)Platform::KeyboardKey::KEY_MAX];
 };
 
-inline InputState inputState;
-
 bool isKeyPressed(KeyboardKey key);
+bool wasKeyPressed(KeyboardKey key);
+bool wasKeyReleased(KeyboardKey key);
 bool isMouseDown(bool left);
+
+inline InputState* contextInput;
 
 }  // namespace Platform

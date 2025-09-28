@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/context.hpp"
 #include "input.hpp"
 #include "platform.hpp"
 #include "lib/log.hpp"
@@ -231,28 +232,29 @@ static KeyboardKey translateKeyMapping(int vkKey)
         default: return KeyboardKey::KEY_UNKNOWN;
     }
 }
+
 static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
     switch (uMsg)
     {
         case WM_RBUTTONDOWN:
         {
-            inputState.mouse.rightState = ButtonState::Pressed;
+            contextInput->mouse.rightState = ButtonState::Pressed;
             break;
         }
         case WM_RBUTTONUP:
         {
-            inputState.mouse.rightState = ButtonState::Released;
+            contextInput->mouse.rightState = ButtonState::Released;
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            inputState.mouse.leftState = ButtonState::Pressed;
+            contextInput->mouse.leftState = ButtonState::Pressed;
             break;
         }
         case WM_LBUTTONUP:
         {
-            inputState.mouse.leftState = ButtonState::Released;
+            contextInput->mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -263,16 +265,26 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             auto key = (int)wParam;
             auto wasDown = ((lParam & (1 << 30)) != 0);
             auto isDown = ((lParam & (1 << 31)) == 0);
-            if (wasDown != isDown)
-                inputState.keyboard[translateKeyMapping(key)] = isDown ? ButtonState::Pressed : ButtonState::Released;
+
+            if (isDown)
+            {
+                if (wasDown != isDown)
+                    contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
+                else
+                    contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
+            }
+            else
+            {
+                contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Released;
+            }
             break;
         }
         case WM_MOUSEMOVE:
         {
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
-            inputState.mouse.pos.x = (float)GET_X_LPARAM(lParam);
-            inputState.mouse.pos.y = (float)GET_Y_LPARAM(lParam);
+            contextInput->mouse.pos.x = (float)GET_X_LPARAM(lParam);
+            contextInput->mouse.pos.y = (float)GET_Y_LPARAM(lParam);
             break;
         }
         case WM_KILLFOCUS:
@@ -348,12 +360,17 @@ void pollEvents()
 
 bool isKeyPressed(KeyboardKey key)
 {
-    return inputState.keyboard[key] == ButtonState::Pressed;
+    return contextInput->keyboard[key] == ButtonState::Pressed || contextInput->keyboard[key] == ButtonState::Holding;
+}
+
+bool wasKeyPressed(KeyboardKey key)
+{
+    return contextInput->keyboard[key] == ButtonState::Pressed;
 }
 
 bool isMouseDown(bool left)
 {
-    return (left ? inputState.mouse.leftState : inputState.mouse.rightState) == ButtonState::Pressed;
+    return (left ? contextInput->mouse.leftState : contextInput->mouse.rightState) == ButtonState::Pressed;
 }
 
 void* allocMemory(size_t size)

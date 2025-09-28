@@ -28,6 +28,17 @@
         _logVerbose = false;      \
         assert(false);            \
     } while (0)
+#define ENSURE(x, ...)                                    \
+    do                                                    \
+    {                                                     \
+        if (!(x))                                         \
+        {                                                 \
+            _logFile = __FILE__;                          \
+            _logLine = __LINE__;                          \
+            _logError("ensure failed: " #x, __VA_ARGS__); \
+            assert(false);                                \
+        }                                                 \
+    } while (0)
 #endif
 
 namespace Platform
@@ -42,11 +53,9 @@ inline bool windowShouldClose;
 void pollEvents();
 void swapBuffers();
 
-// memory
 void* allocMemory(size_t size);
 void freeMemory(void* addr, size_t size);
 
-// file ops
 void getExeDirectory(char* path);
 u64 getFileLastWrittenTime(const char* fileName);
 void copyFile(const char* src, const char* dst);

@@ -1,3 +1,5 @@
+#include "app/input.hpp"
+#include "app/renderer.hpp"
 #if 0
 
 #include "game.hpp"
