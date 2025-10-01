@@ -50,3 +50,14 @@ void memset(T& memory, int value)
 }
 
 #define ARR_LENGTH(arr) sizeof(arr) / sizeof(arr[0])
+
+template <typename T, typename Predicate>
+T* find(T* array, size_t arrayLength, Predicate&& pred)
+{
+    for (auto iter = array, end = array + arrayLength; iter != end; ++iter)
+    {
+        if (pred(*iter))
+            return iter;
+    }
+    return nullptr;
+}

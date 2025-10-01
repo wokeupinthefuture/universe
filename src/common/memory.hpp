@@ -1,12 +1,7 @@
 #pragma once
 
-#include <cassert>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-
-#include "lib/common.hpp"
-#include "platform.hpp"
+#include "common.hpp"
+#include "../platform.hpp"
 
 struct Arena
 {
@@ -16,9 +11,9 @@ struct Arena
     size_t currentOffset;
 };
 
-inline void arenaInit(Arena& arena, size_t sizeBytes)
+inline void arenaInit(Arena& arena, size_t sizeBytes, void* startAddr = nullptr)
 {
-    arena.buffer = (u8*)Platform::allocMemory(sizeBytes);
+    arena.buffer = (u8*)Platform::allocMemory(sizeBytes, startAddr);
     arena.size = sizeBytes;
     arena.currentOffset = 0;
     arena.previousOffset = 0;

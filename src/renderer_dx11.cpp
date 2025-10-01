@@ -1,15 +1,10 @@
-#include "app/platform.hpp"
-#include "lib/utils.hpp"
+#include "geometry.hpp"
 #include "renderer.hpp"
 #include <d3d11.h>
+#include <d3dcommon.h>
 #include <d3dcompiler.h>
-#include <algorithm>
 
-#include "game/shaders/dx11/basic.hpp"
-#include "lib/log.hpp"
-
-namespace Renderer
-{
+#include "shaders/dx11/basic.hpp"
 
 ID3D11Device* device;
 IDXGISwapChain* swapChain;
@@ -17,6 +12,7 @@ ID3D11DeviceContext* deviceContext;
 ID3D11RenderTargetView* rtView;
 
 ID3D11Buffer* vertexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
+ID3D11Buffer* indexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
 
 struct BasicVSConstantBuffer
 {
@@ -33,8 +29,6 @@ enum class ConstantBufferType
     PixelShader
 };
 
-static constexpr auto MAX_CONSTANT_BUFFER_MAPPINGS = 5;
-
 struct ConstantBufferFieldMapping
 {
     const char* name;
@@ -47,7 +41,7 @@ struct ConstantBuffer
 {
     ID3D11Buffer* vsBuffer;
     ID3D11Buffer* psBuffer;
-    ConstantBufferFieldMapping mappings[MAX_CONSTANT_BUFFER_MAPPINGS];
+    ConstantBufferFieldMapping mappings[MAX_SHADER_VARIABLES];
 };
 
 ConstantBuffer constantBuffers[(i32)ShaderType::Max] = {};
@@ -60,6 +54,8 @@ struct Shader
 };
 
 Shader shaders[(i32)ShaderType::Max] = {};
+
+ID3D11RasterizerState* rasterizerStates[(i32)RasterizerState::Max] = {};
 
 static ID3DBlob* compileShader(const char* src, const char* target)
 {
@@ -123,14 +119,33 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, int vertexCount)
 
     D3D11_BUFFER_DESC bd = {};
     bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    bd.Usage = D3D11_USAGE_DEFAULT;
+    bd.Usage = D3D11_USAGE_IMMUTABLE;
     bd.CPUAccessFlags = 0;
     bd.MiscFlags = 0;
-
-    D3D11_SUBRESOURCE_DATA sd = {};
     bd.StructureByteStride = sizeof(Vertex);
     bd.ByteWidth = sizeof(Vertex) * vertexCount;
+
+    D3D11_SUBRESOURCE_DATA sd = {};
     sd.pSysMem = vertices;
+
+    HR_ASSERT(device->CreateBuffer(&bd, &sd, &buffer));
+
+    return buffer;
+}
+
+static ID3D11Buffer* createIndexBuffer(u32 const* indices, int indexCount)
+{
+    ID3D11Buffer* buffer;
+
+    D3D11_BUFFER_DESC bd = {};
+    bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    bd.Usage = D3D11_USAGE_IMMUTABLE;
+    bd.CPUAccessFlags = 0;
+    bd.MiscFlags = 0;
+    bd.ByteWidth = sizeof(u32) * indexCount;
+
+    D3D11_SUBRESOURCE_DATA sd = {};
+    sd.pSysMem = indices;
 
     HR_ASSERT(device->CreateBuffer(&bd, &sd, &buffer));
 
@@ -157,7 +172,21 @@ static ID3D11Buffer* createConstantBuffer(ShaderType shaderType, D3D11_USAGE usa
     return constantBuffer;
 }
 
-void init(Platform::Window window, float windowWidth, float windowHeight)
+static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
+{
+    D3D11_RASTERIZER_DESC rasterizerDesc = {};
+    rasterizerDesc.FillMode = state == RasterizerState::Wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+    rasterizerDesc.CullMode = D3D11_CULL_BACK;  // state == RasterizerState::Wireframe ? D3D11_CULL_NONE : D3D11_CULL_BACK;
+    rasterizerDesc.FrontCounterClockwise = FALSE;
+    rasterizerDesc.DepthClipEnable = TRUE;
+
+    ID3D11RasterizerState* rasterizerState = nullptr;
+    HR_ASSERT(device->CreateRasterizerState(&rasterizerDesc, &rasterizerState));
+
+    return rasterizerState;
+}
+
+void renderInit(void* window, float windowWidth, float windowHeight)
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc{};
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -200,19 +229,32 @@ void init(Platform::Window window, float windowWidth, float windowHeight)
     deviceContext->RSSetViewports(1, &vp);
 
     vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(TRIANGLE_VERTICES, ARR_LENGTH(TRIANGLE_VERTICES));
+    indexBuffers[(i32)MeshType::Triangle] = createIndexBuffer(TRIANGLE_INDICES, ARR_LENGTH(TRIANGLE_INDICES));
+
     vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(QUAD_VERTICES, ARR_LENGTH(QUAD_VERTICES));
+    indexBuffers[(i32)MeshType::Quad] = createIndexBuffer(QUAD_INDICES, ARR_LENGTH(QUAD_INDICES));
 
-    const u32 strides[] = {
-        (u32)sizeof(Vertex),
-        (u32)sizeof(Vertex),
-    };
-    const u32 offsets[] = {0, 0};
-    deviceContext->IASetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
+    generateSphere(SPHERE_RADIUS,
+        SPHERE_STACKS,
+        SPHERE_SLICES,
+        SPHERE_VERTICES,
+        ARR_LENGTH(SPHERE_VERTICES),
+        SPHERE_INDICES,
+        ARR_LENGTH(SPHERE_INDICES));
+    vertexBuffers[(i32)MeshType::Sphere] = createVertexBuffer(SPHERE_VERTICES, ARR_LENGTH(SPHERE_VERTICES));
+    indexBuffers[(i32)MeshType::Sphere] = createIndexBuffer(SPHERE_INDICES, ARR_LENGTH(SPHERE_INDICES));
 
-    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-    dsDesc.DepthEnable = true;
-    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;  // Important: use LESS for depth testing
+    generateGrid(GRID_X, GRID_Y, GRID_SPACING, GRID_VERTICES, ARR_LENGTH(GRID_VERTICES), GRID_INDICES, ARR_LENGTH(GRID_INDICES));
+    vertexBuffers[(i32)MeshType::Grid] = createVertexBuffer(GRID_VERTICES, ARR_LENGTH(GRID_VERTICES));
+    indexBuffers[(i32)MeshType::Grid] = createIndexBuffer(GRID_INDICES, ARR_LENGTH(GRID_INDICES));
+
+    u32* strides = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
+    u32* offsets = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
+    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
+        memset(strides + i, sizeof(Vertex), sizeof(u32));
+    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
+        memset(offsets + i, 0, sizeof(u32));
+    deviceContext->IASetVertexBuffers(0, 4, vertexBuffers, strides, offsets);
 
     shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
     constantBuffers[(i32)ShaderType::Basic] = {.vsBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
@@ -227,9 +269,12 @@ void init(Platform::Window window, float windowWidth, float windowHeight)
                 .offsetBytes = offsetof(BasicPSConstantBuffer, color),
                 .sizeBytes = sizeof(vec4)},
         }};
+
+    rasterizerStates[(i32)RasterizerState::Default] = createRasterizerState(RasterizerState::Default);
+    rasterizerStates[(i32)RasterizerState::Wireframe] = createRasterizerState(RasterizerState::Wireframe);
 }
 
-void deinit()
+void renderDeinit()
 {
     if (device)
         device->Release();
@@ -241,49 +286,15 @@ void deinit()
         rtView->Release();
 }
 
-void draw(DrawCommand const& command)
-{
-    deviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    switch (command.shader)
-    {
-        case ShaderType::Basic:
-            deviceContext->IASetInputLayout(shaders[0].layout);
-            deviceContext->VSSetShader(shaders[0].vs, nullptr, 0);
-            deviceContext->PSSetShader(shaders[0].ps, nullptr, 0);
-            break;
-
-        default: LOGIC_ERROR();
-    }
-
-    switch (command.mesh)
-    {
-        case MeshType::Triangle: deviceContext->Draw(ARR_LENGTH(TRIANGLE_VERTICES), 0); break;
-        case MeshType::Quad: deviceContext->Draw(ARR_LENGTH(QUAD_VERTICES), 0); break;
-
-        default: LOGIC_ERROR();
-    }
-}
-
-void clear(glm::vec4 color)
-{
-    deviceContext->ClearRenderTargetView(rtView, &color.x);
-}
-
-void present()
-{
-    swapChain->Present(1, 0);
-}
-
-static void setShaderVariable(ShaderType shader, const char* variableName, void* value)
+static void writeShaderVariable(ShaderType shader, const char* variableName, void* value)
 {
     if (shader >= ShaderType::Max)
         LOGIC_ERROR();
 
     auto buffers = constantBuffers[(i32)shader];
 
-    const auto mapping = std::find_if(buffers.mappings,
-        buffers.mappings + ARR_LENGTH(buffers.mappings),
+    const auto mapping = find(buffers.mappings,
+        ARR_LENGTH(buffers.mappings),
         [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
     ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
 
@@ -301,45 +312,125 @@ static void setShaderVariable(ShaderType shader, const char* variableName, void*
         deviceContext->PSSetConstantBuffers(1, 1, &buffer);
 }
 
-void setShaderVariableInt(ShaderType shader, const char* variableName, int value)
+void renderDraw(DrawCommand const& command)
 {
-    setShaderVariable(shader, variableName, &value);
+    for (const auto& variable : command.variables)
+    {
+        if (!variable.name)
+            continue;
+        writeShaderVariable(command.shader, variable.name, (void*)&variable.value);
+    }
+
+    deviceContext->IASetPrimitiveTopology(command.rasterizerState == RasterizerState::Wireframe
+                                              ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+                                              : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    auto& shader = shaders[(i32)command.shader];
+    deviceContext->IASetInputLayout(shader.layout);
+    deviceContext->VSSetShader(shader.vs, nullptr, 0);
+    deviceContext->PSSetShader(shader.ps, nullptr, 0);
+
+    deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState]);
+
+    u32 stride = sizeof(Vertex), offset = 0;
+    deviceContext->IASetVertexBuffers(0, 1, &vertexBuffers[(i32)command.mesh], &stride, &offset);
+    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh], DXGI_FORMAT_R32_UINT, 0);
+    switch (command.mesh)
+    {
+        case MeshType::Triangle: deviceContext->DrawIndexed(ARR_LENGTH(TRIANGLE_INDICES), 0, 0); break;
+        case MeshType::Quad: deviceContext->DrawIndexed(ARR_LENGTH(QUAD_INDICES), 0, 0); break;
+        case MeshType::Sphere: deviceContext->DrawIndexed(ARR_LENGTH(SPHERE_INDICES), 0, 0); break;
+        case MeshType::Grid: deviceContext->DrawIndexed(ARR_LENGTH(GRID_INDICES), 0, 0); break;
+        default: LOGIC_ERROR();
+    }
 }
 
-void setShaderVariableFloat(ShaderType shader, const char* variableName, float value)
+void renderClear(glm::vec4 color)
 {
-    setShaderVariable(shader, variableName, &value);
+    deviceContext->ClearRenderTargetView(rtView, &color.x);
 }
 
-void setShaderVariableVec2(ShaderType shader, const char* variableName, vec2 value)
+void renderPresent()
 {
-    setShaderVariable(shader, variableName, &value.x);
+    swapChain->Present(1, 0);
 }
 
-void setShaderVariableVec3(ShaderType shader, const char* variableName, vec3 value)
+void createShaderVariables(DrawCommand& command)
 {
-    setShaderVariable(shader, variableName, &value.x);
+    for (int i = 0; i < MAX_SHADER_VARIABLES; ++i)
+    {
+        auto& mapping = constantBuffers[(i32)command.shader].mappings[i];
+        command.variables[i] = {
+            .name = mapping.name,
+            .value = {},
+        };
+    }
 }
 
-void setShaderVariableVec4(ShaderType shader, const char* variableName, vec4 value)
+static ShaderVariable* getVariableByName(ShaderVariable* variables, const char* name)
 {
-    setShaderVariable(shader, variableName, &value.x);
+    auto var = find(variables, MAX_SHADER_VARIABLES, [name](ShaderVariable& var) { return strncmp(var.name, name, 256) == 0; });
+    ENSURE(var != variables + MAX_SHADER_VARIABLES, "shader variable %s not found!", name);
+    return var;
 }
 
-void setShaderVariableMat4(ShaderType shader, const char* variableName, mat4 value)
+void setShaderVariableInt(DrawCommand& command, const char* variableName, int value)
 {
-    setShaderVariable(shader, variableName, &value[0][0]);
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.i = value;
+    var->value = newValue;
 }
 
-mat4 getShaderVariableMat4(ShaderType shader, const char* variableName)
+void setShaderVariableFloat(DrawCommand& command, const char* variableName, float value)
 {
-    if (shader >= ShaderType::Max)
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.f = value;
+    var->value = newValue;
+}
+
+void setShaderVariableVec2(DrawCommand& command, const char* variableName, vec2 value)
+{
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.v2 = value;
+    var->value = newValue;
+}
+
+void setShaderVariableVec3(DrawCommand& command, const char* variableName, vec3 value)
+{
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.v3 = value;
+    var->value = newValue;
+}
+
+void setShaderVariableVec4(DrawCommand& command, const char* variableName, vec4 value)
+{
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.v4 = value;
+    var->value = newValue;
+}
+
+void setShaderVariableMat4(DrawCommand& command, const char* variableName, mat4 value)
+{
+    auto var = getVariableByName(command.variables, variableName);
+    ShaderVariableValue newValue;
+    newValue.m4 = value;
+    var->value = newValue;
+}
+
+mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName)
+{
+    if (command.shader >= ShaderType::Max)
         LOGIC_ERROR();
 
-    auto buffers = constantBuffers[(i32)shader];
+    auto buffers = constantBuffers[(i32)command.shader];
 
-    const auto mapping = std::find_if(buffers.mappings,
-        buffers.mappings + ARR_LENGTH(buffers.mappings),
+    const auto mapping = find(buffers.mappings,
+        ARR_LENGTH(buffers.mappings),
         [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
     ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
 
@@ -374,5 +465,3 @@ mat4 getShaderVariableMat4(ShaderType shader, const char* variableName)
 
     return matrix;
 }
-
-}  // namespace Renderer

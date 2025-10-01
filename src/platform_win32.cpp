@@ -1,9 +1,8 @@
 #pragma once
 
-#include "app/context.hpp"
+#include "context.hpp"
 #include "input.hpp"
 #include "platform.hpp"
-#include "lib/log.hpp"
 
 #include <cstring>
 
@@ -74,8 +73,7 @@ static int resolveKeyMapping(KeyboardKey key)
         case KeyboardKey::KEY_F12: return VK_F12;
 
         // Modifier keys
-        case KeyboardKey::KEY_SHIFT_LEFT: return VK_LSHIFT;
-        case KeyboardKey::KEY_SHIFT_RIGHT: return VK_RSHIFT;
+        case KeyboardKey::KEY_SHIFT: return VK_SHIFT;
         case KeyboardKey::KEY_CONTROL_LEFT: return VK_LCONTROL;
         case KeyboardKey::KEY_CONTROL_RIGHT: return VK_RCONTROL;
         case KeyboardKey::KEY_ALT_LEFT: return VK_LMENU;
@@ -183,8 +181,7 @@ static KeyboardKey translateKeyMapping(int vkKey)
         case VK_F12: return KeyboardKey::KEY_F12;
 
         // Modifier keys
-        case VK_LSHIFT: return KeyboardKey::KEY_SHIFT_LEFT;
-        case VK_RSHIFT: return KeyboardKey::KEY_SHIFT_RIGHT;
+        case VK_SHIFT: return KeyboardKey::KEY_SHIFT;
         case VK_LCONTROL: return KeyboardKey::KEY_CONTROL_LEFT;
         case VK_RCONTROL: return KeyboardKey::KEY_CONTROL_RIGHT;
         case VK_LMENU: return KeyboardKey::KEY_ALT_LEFT;
@@ -239,22 +236,22 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
     {
         case WM_RBUTTONDOWN:
         {
-            contextInput->mouse.rightState = ButtonState::Pressed;
+            g_input->mouse.rightState = ButtonState::Pressed;
             break;
         }
         case WM_RBUTTONUP:
         {
-            contextInput->mouse.rightState = ButtonState::Released;
+            g_input->mouse.rightState = ButtonState::Released;
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            contextInput->mouse.leftState = ButtonState::Pressed;
+            g_input->mouse.leftState = ButtonState::Pressed;
             break;
         }
         case WM_LBUTTONUP:
         {
-            contextInput->mouse.leftState = ButtonState::Released;
+            g_input->mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -269,13 +266,13 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             if (isDown)
             {
                 if (wasDown != isDown)
-                    contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
+                    g_input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
                 else
-                    contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
+                    g_input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
             }
             else
             {
-                contextInput->keyboard[translateKeyMapping(key)] = ButtonState::Released;
+                g_input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
             }
             break;
         }
@@ -283,8 +280,8 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         {
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
-            contextInput->mouse.pos.x = (float)GET_X_LPARAM(lParam);
-            contextInput->mouse.pos.y = (float)GET_Y_LPARAM(lParam);
+            g_input->mouse.pos.x = (float)GET_X_LPARAM(lParam);
+            g_input->mouse.pos.y = (float)GET_Y_LPARAM(lParam);
             break;
         }
         case WM_KILLFOCUS:
@@ -358,24 +355,9 @@ void pollEvents()
     }
 }
 
-bool isKeyPressed(KeyboardKey key)
+void* allocMemory(size_t size, void* startAddr)
 {
-    return contextInput->keyboard[key] == ButtonState::Pressed || contextInput->keyboard[key] == ButtonState::Holding;
-}
-
-bool wasKeyPressed(KeyboardKey key)
-{
-    return contextInput->keyboard[key] == ButtonState::Pressed;
-}
-
-bool isMouseDown(bool left)
-{
-    return (left ? contextInput->mouse.leftState : contextInput->mouse.rightState) == ButtonState::Pressed;
-}
-
-void* allocMemory(size_t size)
-{
-    return VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    return VirtualAlloc(startAddr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 }
 
 void freeMemory(void* addr, size_t size)

@@ -1,7 +1,5 @@
 #include "entity.hpp"
-#include "app/renderer.hpp"
-#include "lib/log.hpp"
-#include "lib/math.hpp"
+#include "renderer.hpp"
 
 static vec3 transformMatrixGetPos(mat4 mat)
 {
@@ -65,7 +63,7 @@ static mat4 getWorldMatrix(Entity& entity)
     return entity.worldMatrixCache;
 }
 
-static void calculateCameraView(ECamera& camera)
+static void calculateCameraView(Entity& camera)
 {
     const auto rotation = glm::toMat4(camera.rotation);
     const auto target = camera.position + getForwardVector(rotation);
@@ -73,54 +71,69 @@ static void calculateCameraView(ECamera& camera)
     camera.view = lookAtLH(camera.position, target, up);
 }
 
-static void calculateCameraTransform(ECamera& camera)
-{
-    calculateCameraView(camera);
-    for (size_t i = 0; i < realDrawables; ++i)
-        updateTransform(drawables[i]);
-}
-
-static void calculateCameraProjection(ECamera& camera)
-{
-    camera.perspective = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
-    calculateCameraTransform(camera);
-}
-
-void updateTransform(EDrawable& entity)
+static void updateTransform(Entity& entity, Entity& camera)
 {
     const auto model = getWorldMatrix(entity);
-    const auto view = screenCamera.view;
-    const auto projection = screenCamera.perspective;
-    Renderer::setShaderVariableMat4(entity.shader, "mvp", transpose(projection * view * model));
+    const auto view = camera.view;
+    const auto projection = camera.perspective;
+    setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
 }
 
-void addLocalPosition(EDrawable& entity, vec3 pos)
+static void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
+{
+    calculateCameraView(camera);
+    for (size_t i = 0; i < entities.size; ++i)
+        if (sameType(entities[i], EntityType::Drawable))
+            updateTransform(entities[i], camera);
+}
+
+void calculateCameraProjection(Entity& camera, HeapArray<Entity> entities)
+{
+    camera.perspective = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
+    calculateCameraTransform(camera, entities);
+}
+
+static void updateTransformByType(Entity& entity)
+{
+    ENSURE(g_entityManager != nullptr);
+    if ((i32)entity.type & (i32)EntityType::Camera)
+    {
+        calculateCameraTransform(entity, g_entityManager->entities);
+    }
+    else
+    {
+        updateTransform(entity, g_entityManager->camera);
+    }
+}
+
+bool sameType(Entity& entity, EntityType type)
+{
+    return (i32)entity.type & (i32)type;
+}
+
+void addLocalPosition(Entity& entity, vec3 pos)
 {
     setLocalPosition(entity, entity.position + pos);
 }
 
-void setLocalPosition(EDrawable& entity, vec3 pos)
+void setLocalPosition(Entity& entity, vec3 pos)
 {
     entity.position = pos;
     entity.isWorldMatrixDirty = true;
-    updateTransform(entity);
+    updateTransformByType(entity);
 }
 
-void setLocalScale(EDrawable& entity, vec3 scale)
+void setLocalScale(Entity& entity, vec3 scale)
 {
     entity.scale = scale;
     entity.isWorldMatrixDirty = true;
-    updateTransform(entity);
+    updateTransformByType(entity);
 }
 
-void addLocalPosition(ECamera& camera, vec3 pos)
+void setLocalRotation(Entity& entity, vec3 rot)
 {
-    setLocalPosition(camera, camera.position + pos);
-}
-
-void setLocalPosition(ECamera& camera, vec3 pos)
-{
-    camera.position = pos;
-    camera.isWorldMatrixDirty = true;
-    calculateCameraTransform(camera);
+    entity.rotation = eulerToQuat(rot);
+    entity.euler = rot;
+    entity.isWorldMatrixDirty = true;
+    updateTransformByType(entity);
 }

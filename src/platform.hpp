@@ -1,7 +1,6 @@
 #pragma once
 
-#include "lib/common.hpp"
-#include "input.hpp"
+#include "common/common.hpp"
 
 #define PLATFORM_WIN32 0
 #define PLATFORM_TYPE PLATFORM_WIN32
@@ -51,9 +50,8 @@ void closeWindow(Window window);
 inline bool windowShouldClose;
 
 void pollEvents();
-void swapBuffers();
 
-void* allocMemory(size_t size);
+void* allocMemory(size_t size, void* startAddr = nullptr);
 void freeMemory(void* addr, size_t size);
 
 void getExeDirectory(char* path);

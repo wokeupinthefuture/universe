@@ -1,9 +1,6 @@
 #pragma once
 
-#include "lib/common.hpp"
-
-namespace Platform
-{
+#include "common/common.hpp"
 
 enum KeyboardKey
 {
@@ -62,8 +59,7 @@ enum KeyboardKey
     KEY_F12,
 
     // Modifier keys
-    KEY_SHIFT_LEFT,
-    KEY_SHIFT_RIGHT,
+    KEY_SHIFT,
     KEY_CONTROL_LEFT,
     KEY_CONTROL_RIGHT,
     KEY_ALT_LEFT,
@@ -130,15 +126,13 @@ struct InputState
         bool isCaptured;
     } mouse;
 
-    ButtonState keyboard[(int)Platform::KeyboardKey::KEY_MAX];
-    ButtonState prevKeyboard[(int)Platform::KeyboardKey::KEY_MAX];
+    ButtonState keyboard[(int)KeyboardKey::KEY_MAX];
+    ButtonState prevKeyboard[(int)KeyboardKey::KEY_MAX];
 };
+
+inline InputState* g_input;
 
 bool isKeyPressed(KeyboardKey key);
 bool wasKeyPressed(KeyboardKey key);
 bool wasKeyReleased(KeyboardKey key);
 bool isMouseDown(bool left);
-
-inline InputState* contextInput;
-
-}  // namespace Platform
