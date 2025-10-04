@@ -75,9 +75,6 @@ inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType m
 
     createShaderVariables(cmd);
 
-    if (cmd.shader == ShaderType::Basic)
-        setShaderVariableVec4(cmd, "color", vec4(1, 1, 1, 1));
-
     return arrayPush(drawCommands, cmd);
 }
 

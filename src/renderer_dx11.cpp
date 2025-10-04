@@ -1,4 +1,6 @@
+#include "common/utils.hpp"
 #include "geometry.hpp"
+#include "platform.hpp"
 #include "renderer.hpp"
 #include <d3d11.h>
 #include <d3dcommon.h>
@@ -14,15 +16,6 @@ ID3D11RenderTargetView* rtView;
 ID3D11Buffer* vertexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
 ID3D11Buffer* indexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
 
-struct BasicVSConstantBuffer
-{
-    mat4 mvp;
-};
-struct BasicPSConstantBuffer
-{
-    vec4 color;
-};
-
 enum class ConstantBufferType
 {
     VertexShader,
@@ -35,6 +28,7 @@ struct ConstantBufferFieldMapping
     ConstantBufferType bufferType;
     size_t offsetBytes;
     size_t sizeBytes;
+    ShaderVariableValue defaultValue;
 };
 
 struct ConstantBuffer
@@ -43,6 +37,20 @@ struct ConstantBuffer
     ID3D11Buffer* psBuffer;
     ConstantBufferFieldMapping mappings[MAX_SHADER_VARIABLES];
 };
+
+static ConstantBufferFieldMapping _createFieldMapping(
+    const char* name, ConstantBufferType type, size_t offsetBytes, size_t sizeBytes, const void* value)
+{
+    ConstantBufferFieldMapping mapping{};
+    mapping.name = name;
+    mapping.bufferType = type;
+    mapping.offsetBytes = offsetBytes;
+    mapping.sizeBytes = sizeBytes;
+    memcpy(&mapping.defaultValue, value, sizeof(ConstantBufferFieldMapping::defaultValue));
+    return mapping;
+}
+#define createFieldMapping(bufferStruct, bufferField, type, value) \
+    _createFieldMapping((#bufferField), (type), offsetof(bufferStruct, bufferField), sizeof(bufferStruct::bufferField), (value))
 
 ConstantBuffer constantBuffers[(i32)ShaderType::Max] = {};
 
@@ -160,14 +168,14 @@ static ID3D11Buffer* createConstantBuffer(ShaderType shaderType, D3D11_USAGE usa
     cbDesc.Usage = usage;
     switch (shaderType)
     {
-        case ShaderType::Basic: cbDesc.ByteWidth = sizeof(BasicVSConstantBuffer); break;
+        case ShaderType::Basic: cbDesc.ByteWidth = sizeof(Shaders::Basic::VariablesVS); break;
         default: LOGIC_ERROR();
     }
     cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     if (usage == D3D11_USAGE_DYNAMIC)
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-    device->CreateBuffer(&cbDesc, nullptr, &constantBuffer);
+    HR_ASSERT(device->CreateBuffer(&cbDesc, nullptr, &constantBuffer));
 
     return constantBuffer;
 }
@@ -251,23 +259,24 @@ void renderInit(void* window, float windowWidth, float windowHeight)
     u32* strides = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
     u32* offsets = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
     for (i32 i = 0; i < (i32)MeshType::Max; ++i)
-        memset(strides + i, sizeof(Vertex), sizeof(u32));
-    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
-        memset(offsets + i, 0, sizeof(u32));
-    deviceContext->IASetVertexBuffers(0, 4, vertexBuffers, strides, offsets);
+    {
+        strides[i] = sizeof(Vertex);
+        offsets[i] = 0;
+    }
+
+    deviceContext->IASetVertexBuffers(0, (i32)MeshType::Max, vertexBuffers, strides, offsets);
 
     shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
     constantBuffers[(i32)ShaderType::Basic] = {.vsBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
         .psBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
         .mappings = {
-            {.name = "mvp",
-                .bufferType = ConstantBufferType::VertexShader,
-                .offsetBytes = offsetof(BasicVSConstantBuffer, mvp),
-                .sizeBytes = sizeof(mat4)},
-            {.name = "color",
-                .bufferType = ConstantBufferType::PixelShader,
-                .offsetBytes = offsetof(BasicPSConstantBuffer, color),
-                .sizeBytes = sizeof(vec4)},
+            createFieldMapping(
+                Shaders::Basic::VariablesVS, mvp, ConstantBufferType::VertexShader, &Shaders::Basic::DEFAULT_VARIABLES_VS.mvp),
+
+            createFieldMapping(
+                Shaders::Basic::VariablesVS, time, ConstantBufferType::VertexShader, &Shaders::Basic::DEFAULT_VARIABLES_VS.time),
+            createFieldMapping(
+                Shaders::Basic::VariablesPS, color, ConstantBufferType::PixelShader, &Shaders::Basic::DEFAULT_VARIABLES_PS.color),
         }};
 
     rasterizerStates[(i32)RasterizerState::Default] = createRasterizerState(RasterizerState::Default);
@@ -286,40 +295,75 @@ void renderDeinit()
         rtView->Release();
 }
 
-static void writeShaderVariable(ShaderType shader, const char* variableName, void* value)
+struct ShaderVariablesBufferData
+{
+    ID3D11Buffer* buffer;
+    u8* data;
+    size_t dataSizeBytes;
+    ConstantBufferType type;
+};
+
+static void writeShaderVariablesBuffer(ShaderVariablesBufferData bd)
+{
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+
+    HR_ASSERT(deviceContext->Map(bd.buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+    memcpy((uint8_t*)mappedResource.pData, bd.data, bd.dataSizeBytes);
+
+    deviceContext->Unmap(bd.buffer, 0);
+    if (bd.type == ConstantBufferType::VertexShader)
+        deviceContext->VSSetConstantBuffers(0, 1, &bd.buffer);
+    else
+        deviceContext->PSSetConstantBuffers(1, 1, &bd.buffer);
+}
+
+static void writeShaderVariables(ShaderType shader, const ShaderVariable* variables, size_t variablesCount)
 {
     if (shader >= ShaderType::Max)
         LOGIC_ERROR();
 
     auto buffers = constantBuffers[(i32)shader];
 
-    const auto mapping = find(buffers.mappings,
-        ARR_LENGTH(buffers.mappings),
-        [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
-    ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
+    ShaderVariablesBufferData bdVS{};
+    bdVS.buffer = buffers.vsBuffer;
+    bdVS.type = ConstantBufferType::VertexShader;
 
-    const auto buffer = mapping->bufferType == ConstantBufferType::VertexShader ? buffers.vsBuffer : buffers.psBuffer;
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    HR_ASSERT(deviceContext->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+    ShaderVariablesBufferData bdPS{};
+    bdPS.buffer = buffers.psBuffer;
+    bdPS.type = ConstantBufferType::PixelShader;
 
-    const auto data = (uint8_t*)mappedResource.pData;
-    memcpy(data + mapping->offsetBytes, value, mapping->sizeBytes);
+    if (shader == ShaderType::Basic)
+    {
+        bdVS.dataSizeBytes = sizeof(Shaders::Basic::VariablesVS);
+        bdVS.data = (u8*)alloca(bdVS.dataSizeBytes);
+        bdPS.dataSizeBytes = sizeof(Shaders::Basic::VariablesPS);
+        bdPS.data = (u8*)alloca(bdPS.dataSizeBytes);
+    }
 
-    deviceContext->Unmap(buffer, 0);
-    if (mapping->bufferType == ConstantBufferType::VertexShader)
-        deviceContext->VSSetConstantBuffers(0, 1, &buffer);
-    else
-        deviceContext->PSSetConstantBuffers(1, 1, &buffer);
+    for (size_t i = 0; i < variablesCount; ++i)
+    {
+        const auto& variable = variables[i];
+        if (!variable.name)
+            continue;
+
+        const auto mapping = find(buffers.mappings,
+            MAX_SHADER_VARIABLES,
+            [variable](auto const& mapping) { return strncmp(mapping.name, variable.name, 256) == 0; });
+        if (mapping)
+        {
+            const auto data = mapping->bufferType == ConstantBufferType::VertexShader ? bdVS.data : bdPS.data;
+            memcpy(data + mapping->offsetBytes, &variable.value, mapping->sizeBytes);
+        }
+    }
+
+    writeShaderVariablesBuffer(bdVS);
+    writeShaderVariablesBuffer(bdPS);
 }
 
 void renderDraw(DrawCommand const& command)
 {
-    for (const auto& variable : command.variables)
-    {
-        if (!variable.name)
-            continue;
-        writeShaderVariable(command.shader, variable.name, (void*)&variable.value);
-    }
+    writeShaderVariables(command.shader, command.variables, MAX_SHADER_VARIABLES);
 
     deviceContext->IASetPrimitiveTopology(command.rasterizerState == RasterizerState::Wireframe
                                               ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
@@ -364,6 +408,7 @@ void createShaderVariables(DrawCommand& command)
             .name = mapping.name,
             .value = {},
         };
+        memcpy(&command.variables[i].value, &mapping.defaultValue, mapping.sizeBytes);
     }
 }
 

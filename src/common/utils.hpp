@@ -61,3 +61,13 @@ T* find(T* array, size_t arrayLength, Predicate&& pred)
     }
     return nullptr;
 }
+
+#include <chrono>
+
+inline float getElapsedTime()
+{
+    static auto start = std::chrono::high_resolution_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<float> duration = now - start;
+    return duration.count();  // Returns elapsed time in seconds
+}

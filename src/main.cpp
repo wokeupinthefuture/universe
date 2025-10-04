@@ -104,14 +104,6 @@ int main()
         game.updateAndRender(context);
 
         arenaFreeAll(context.tempMemory);
-
-        for (auto& kb : context.input.keyboard)
-        {
-            if (kb == ButtonState::Pressed)
-                kb = ButtonState::Holding;
-            if (kb == ButtonState::Released)
-                kb = ButtonState::NotPressed;
-        }
     }
 
     game.exit(context);

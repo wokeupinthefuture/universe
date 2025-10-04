@@ -3,6 +3,7 @@
 #include "entity.hpp"
 #include "input.hpp"
 
+#include "common/math.cpp"
 #include "geometry.cpp"
 #include "renderer.hpp"
 #include "renderer_dx11.cpp"
@@ -27,7 +28,7 @@ Entity* pushDrawable(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCm
     return arrayPush(entities, entity);
 }
 
-static void gameStart(Context& ctx)
+void gameInit(Context& ctx)
 {
     g_entityManager = &ctx.entityManager;
     g_input = &ctx.input;
@@ -43,7 +44,7 @@ static void gameStart(Context& ctx)
 
     ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Grid);
     ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Sphere);
-    setShaderVariableVec4(*ctx.gameState.sphere->drawCommand, "color", vec4(0.5f, 1.f, 0.5f, 1.f));
+    setShaderVariableVec4(*ctx.gameState.sphere->drawCommand, "color", vec4(0.2f, 1.f, 0.5f, 1.f));
 
     calculateCameraProjection(camera, ctx.entityManager.entities);
     setLocalPosition(camera, vec3(0, 5, -30));
@@ -51,19 +52,14 @@ static void gameStart(Context& ctx)
     g_entityManager->camera = camera;
 }
 
-void gameInit(Context& ctx)
-{
-    gameStart(ctx);
-}
-
 void gamePreHotReload(Context& ctx)
 {
-    renderDeinit();
+    gameExit(ctx);
 }
 
 void gamePostHotReload(Context& ctx)
 {
-    gameStart(ctx);
+    gameInit(ctx);
 }
 
 void cameraController(Entity& camera)
@@ -105,19 +101,31 @@ void cameraController(Entity& camera)
 
 void gameUpdateAndRender(Context& ctx)
 {
+    float time = getElapsedTime();
+    for (auto& entity : ctx.entityManager.entities)
+        setShaderVariableFloat(*entity.drawCommand, "time", time);
+
     if (isKeyPressed(KeyboardKey::KEY_ESCAPE))
     {
         ctx.wantsToQuit = true;
         return;
     }
 
-    cameraController(g_entityManager->camera);
+    cameraController(ctx.entityManager.camera);
 
     static vec4 clearColor{0, 0, 0, 1};
     renderClear(clearColor);
     for (const auto& command : ctx.render.drawCommands)
         renderDraw(command);
     renderPresent();
+
+    for (auto& kb : ctx.input.keyboard)
+    {
+        if (kb == ButtonState::Pressed)
+            kb = ButtonState::Holding;
+        if (kb == ButtonState::Released)
+            kb = ButtonState::NotPressed;
+    }
 }
 
 void gameExit(Context& ctx)
