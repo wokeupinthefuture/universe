@@ -33,6 +33,7 @@ GameCode loadGameCode()
 
     Platform::copyFile(gameCodeRealPath, gameCodeTempPath);
     game.lib = Platform::loadDynamicLib(GAME_DLL_NAME_TEMP);
+    std::this_thread::sleep_for(1ms);
     game.init = Platform_loadDynamicFunc(game.lib, gameInit);
     game.updateAndRender = Platform_loadDynamicFunc(game.lib, gameUpdateAndRender);
     game.preHotReload = Platform_loadDynamicFunc(game.lib, gamePreHotReload);
@@ -84,9 +85,11 @@ int main()
         Platform::pollEvents();
 
         const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
-        if (gameLastWrittenTime != game.lastWrittenTime)
+        if (gameLastWrittenTime != game.lastWrittenTime || context.wantsToReload)
         {
             game.preHotReload(context);
+
+            std::this_thread::sleep_for(100ms);
 
             unloadGameCode(game);
 
@@ -96,6 +99,8 @@ int main()
             arenaFreeAll(context.tempMemory);
 
             std::this_thread::sleep_for(1ms);
+
+            context.wantsToReload = false;
 
             game = loadGameCode();
             game.postHotReload(context);

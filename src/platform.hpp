@@ -27,16 +27,16 @@
         _logVerbose = false;      \
         assert(false);            \
     } while (0)
-#define ENSURE(x, ...)                                    \
-    do                                                    \
-    {                                                     \
-        if (!(x))                                         \
-        {                                                 \
-            _logFile = __FILE__;                          \
-            _logLine = __LINE__;                          \
-            _logError("ensure failed: " #x, __VA_ARGS__); \
-            assert(false);                                \
-        }                                                 \
+#define ENSURE(x)                            \
+    do                                       \
+    {                                        \
+        if (!(x))                            \
+        {                                    \
+            _logFile = __FILE__;             \
+            _logLine = __LINE__;             \
+            _logError("ensure failed: " #x); \
+            assert(false);                   \
+        }                                    \
     } while (0)
 #endif
 

@@ -280,8 +280,9 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         {
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
-            g_input->mouse.pos.x = (float)GET_X_LPARAM(lParam);
-            g_input->mouse.pos.y = (float)GET_Y_LPARAM(lParam);
+            vec2 mousePos = {(float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam)};
+            g_input->mouse.delta = g_input->mouse.pos - mousePos;
+            g_input->mouse.pos = mousePos;
             break;
         }
         case WM_KILLFOCUS:

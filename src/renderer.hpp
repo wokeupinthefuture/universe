@@ -17,10 +17,11 @@ mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName);
 enum class ShaderType
 {
     Basic,
+    Unlit,
     Max
 };
 
-static constexpr auto MAX_SHADER_VARIABLES = 5;
+static constexpr auto MAX_SHADER_VARIABLES = 10;
 
 union ShaderVariableValue
 {
@@ -65,13 +66,18 @@ void renderDeinit();
 
 void createShaderVariables(DrawCommand& command);
 
-inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType mesh)
+inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType mesh, ShaderType shader = ShaderType::Basic)
 {
     DrawCommand cmd = {};
     cmd.mesh = mesh;
+    cmd.rasterizerState = RasterizerState::Default;
+    cmd.shader = shader;
+
     if (mesh == MeshType::Grid)
+    {
         cmd.rasterizerState = RasterizerState::Wireframe;
-    cmd.shader = ShaderType::Basic;
+        cmd.shader = ShaderType::Unlit;
+    }
 
     createShaderVariables(cmd);
 

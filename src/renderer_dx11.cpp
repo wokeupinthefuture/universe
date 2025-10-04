@@ -7,25 +7,23 @@
 #include <d3dcompiler.h>
 
 #include "shaders/dx11/basic.hpp"
+#include "shaders/dx11/unlit.hpp"
 
-ID3D11Device* device;
-IDXGISwapChain* swapChain;
-ID3D11DeviceContext* deviceContext;
-ID3D11RenderTargetView* rtView;
+#include <wrl/client.h>
 
-ID3D11Buffer* vertexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
-ID3D11Buffer* indexBuffers[(i32)MeshType::Max] = {nullptr, nullptr};
+using namespace Microsoft::WRL;
 
-enum class ConstantBufferType
-{
-    VertexShader,
-    PixelShader
-};
+ComPtr<ID3D11Device> device;
+ComPtr<IDXGISwapChain> swapChain;
+ComPtr<ID3D11DeviceContext> deviceContext;
+ComPtr<ID3D11RenderTargetView> rtView;
+
+ComPtr<ID3D11Buffer> vertexBuffers[(i32)MeshType::Max];
+ComPtr<ID3D11Buffer> indexBuffers[(i32)MeshType::Max];
 
 struct ConstantBufferFieldMapping
 {
     const char* name;
-    ConstantBufferType bufferType;
     size_t offsetBytes;
     size_t sizeBytes;
     ShaderVariableValue defaultValue;
@@ -33,37 +31,34 @@ struct ConstantBufferFieldMapping
 
 struct ConstantBuffer
 {
-    ID3D11Buffer* vsBuffer;
-    ID3D11Buffer* psBuffer;
+    ComPtr<ID3D11Buffer> buffer;
     ConstantBufferFieldMapping mappings[MAX_SHADER_VARIABLES];
 };
 
-static ConstantBufferFieldMapping _createFieldMapping(
-    const char* name, ConstantBufferType type, size_t offsetBytes, size_t sizeBytes, const void* value)
+static ConstantBufferFieldMapping _createFieldMapping(const char* name, size_t offsetBytes, size_t sizeBytes, const void* value)
 {
     ConstantBufferFieldMapping mapping{};
     mapping.name = name;
-    mapping.bufferType = type;
     mapping.offsetBytes = offsetBytes;
     mapping.sizeBytes = sizeBytes;
     memcpy(&mapping.defaultValue, value, sizeof(ConstantBufferFieldMapping::defaultValue));
     return mapping;
 }
-#define createFieldMapping(bufferStruct, bufferField, type, value) \
-    _createFieldMapping((#bufferField), (type), offsetof(bufferStruct, bufferField), sizeof(bufferStruct::bufferField), (value))
+#define createFieldMapping(bufferStruct, bufferField, value) \
+    _createFieldMapping((#bufferField), offsetof(bufferStruct, bufferField), sizeof(bufferStruct::bufferField), (value))
 
 ConstantBuffer constantBuffers[(i32)ShaderType::Max] = {};
 
 struct Shader
 {
-    ID3D11VertexShader* vs;
-    ID3D11PixelShader* ps;
-    ID3D11InputLayout* layout;
+    ComPtr<ID3D11VertexShader> vs;
+    ComPtr<ID3D11PixelShader> ps;
+    ComPtr<ID3D11InputLayout> layout;
 };
 
 Shader shaders[(i32)ShaderType::Max] = {};
 
-ID3D11RasterizerState* rasterizerStates[(i32)RasterizerState::Max] = {};
+ComPtr<ID3D11RasterizerState> rasterizerStates[(i32)RasterizerState::Max] = {};
 
 static ID3DBlob* compileShader(const char* src, const char* target)
 {
@@ -112,10 +107,13 @@ static Shader createShader(const char* vsSrc, const char* psSrc)
     shader.vs = vs;
     shader.ps = ps;
 
-    D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}};
+    D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(Vertex::pos), D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
     ID3D11InputLayout* layout = nullptr;
     HR_ASSERT(device->CreateInputLayout(
-        layoutDesc, ARRAYSIZE(layoutDesc), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &layout));
+        layoutDesc, ARR_LENGTH(layoutDesc), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &layout));
     shader.layout = layout;
 
     return shader;
@@ -168,7 +166,8 @@ static ID3D11Buffer* createConstantBuffer(ShaderType shaderType, D3D11_USAGE usa
     cbDesc.Usage = usage;
     switch (shaderType)
     {
-        case ShaderType::Basic: cbDesc.ByteWidth = sizeof(Shaders::Basic::VariablesVS); break;
+        case ShaderType::Basic: cbDesc.ByteWidth = sizeof(Shaders::Basic::Variables); break;
+        case ShaderType::Unlit: cbDesc.ByteWidth = sizeof(Shaders::Unlit::Variables); break;
         default: LOGIC_ERROR();
     }
     cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -210,7 +209,7 @@ void renderInit(void* window, float windowWidth, float windowHeight)
     HR_ASSERT(D3D11CreateDeviceAndSwapChain(nullptr,
         D3D_DRIVER_TYPE_HARDWARE,
         nullptr,
-        D3D11_CREATE_DEVICE_DEBUG,
+        0,
         nullptr,
         0,
         D3D11_SDK_VERSION,
@@ -220,12 +219,11 @@ void renderInit(void* window, float windowWidth, float windowHeight)
         nullptr,
         &deviceContext));
 
-    ID3D11Resource* backbuffer{};
-    defer({ backbuffer->Release(); });
-    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), (void**)&backbuffer));
-    HR_ASSERT(device->CreateRenderTargetView(backbuffer, nullptr, &rtView));
+    ComPtr<ID3D11Resource> backbuffer{};
+    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
+    HR_ASSERT(device->CreateRenderTargetView(backbuffer.Get(), nullptr, &rtView));
 
-    deviceContext->OMSetRenderTargets(1, &rtView, nullptr);
+    deviceContext->OMSetRenderTargets(1, rtView.GetAddressOf(), nullptr);
 
     D3D11_VIEWPORT vp{};
     vp.TopLeftX = 0;
@@ -241,6 +239,9 @@ void renderInit(void* window, float windowWidth, float windowHeight)
 
     vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(QUAD_VERTICES, ARR_LENGTH(QUAD_VERTICES));
     indexBuffers[(i32)MeshType::Quad] = createIndexBuffer(QUAD_INDICES, ARR_LENGTH(QUAD_INDICES));
+
+    vertexBuffers[(i32)MeshType::Cube] = createVertexBuffer(CUBE_VERTICES, ARR_LENGTH(CUBE_VERTICES));
+    indexBuffers[(i32)MeshType::Cube] = createIndexBuffer(CUBE_INDICES, ARR_LENGTH(CUBE_INDICES));
 
     generateSphere(SPHERE_RADIUS,
         SPHERE_STACKS,
@@ -264,19 +265,30 @@ void renderInit(void* window, float windowWidth, float windowHeight)
         offsets[i] = 0;
     }
 
-    deviceContext->IASetVertexBuffers(0, (i32)MeshType::Max, vertexBuffers, strides, offsets);
+    ID3D11Buffer* vertexBufferPointers[(i32)MeshType::Max];
+    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
+        vertexBufferPointers[i] = vertexBuffers[i].Get();
+    deviceContext->IASetVertexBuffers(0, (i32)MeshType::Max, vertexBufferPointers, strides, offsets);
 
     shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
-    constantBuffers[(i32)ShaderType::Basic] = {.vsBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
-        .psBuffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
+    constantBuffers[(i32)ShaderType::Basic] = {.buffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
         .mappings = {
-            createFieldMapping(
-                Shaders::Basic::VariablesVS, mvp, ConstantBufferType::VertexShader, &Shaders::Basic::DEFAULT_VARIABLES_VS.mvp),
+            createFieldMapping(Shaders::Basic::Variables, mvp, &Shaders::Basic::DEFAULT_VARIABLES.mvp),
+            createFieldMapping(Shaders::Basic::Variables, time, &Shaders::Basic::DEFAULT_VARIABLES.time),
+            createFieldMapping(Shaders::Basic::Variables, objectColor, &Shaders::Basic::DEFAULT_VARIABLES.objectColor),
+            createFieldMapping(Shaders::Basic::Variables, world, &Shaders::Basic::DEFAULT_VARIABLES.world),
+            createFieldMapping(Shaders::Basic::Variables, lightPosition, &Shaders::Basic::DEFAULT_VARIABLES.lightPosition),
+            createFieldMapping(Shaders::Basic::Variables, lightDirection, &Shaders::Basic::DEFAULT_VARIABLES.lightDirection),
+            createFieldMapping(Shaders::Basic::Variables, lightColor, &Shaders::Basic::DEFAULT_VARIABLES.lightColor),
+            createFieldMapping(Shaders::Basic::Variables, lightType, &Shaders::Basic::DEFAULT_VARIABLES.lightType),
+        }};
 
-            createFieldMapping(
-                Shaders::Basic::VariablesVS, time, ConstantBufferType::VertexShader, &Shaders::Basic::DEFAULT_VARIABLES_VS.time),
-            createFieldMapping(
-                Shaders::Basic::VariablesPS, color, ConstantBufferType::PixelShader, &Shaders::Basic::DEFAULT_VARIABLES_PS.color),
+    shaders[(i32)ShaderType::Unlit] = createShader(Shaders::Unlit::vs, Shaders::Unlit::fs);
+    constantBuffers[(i32)ShaderType::Unlit] = {.buffer = createConstantBuffer(ShaderType::Unlit, D3D11_USAGE_DYNAMIC),
+        .mappings = {
+            createFieldMapping(Shaders::Unlit::Variables, mvp, &Shaders::Unlit::DEFAULT_VARIABLES.mvp),
+            createFieldMapping(Shaders::Unlit::Variables, time, &Shaders::Unlit::DEFAULT_VARIABLES.time),
+            createFieldMapping(Shaders::Unlit::Variables, objectColor, &Shaders::Unlit::DEFAULT_VARIABLES.objectColor),
         }};
 
     rasterizerStates[(i32)RasterizerState::Default] = createRasterizerState(RasterizerState::Default);
@@ -285,37 +297,35 @@ void renderInit(void* window, float windowWidth, float windowHeight)
 
 void renderDeinit()
 {
-    if (device)
-        device->Release();
-    if (swapChain)
-        swapChain->Release();
     if (deviceContext)
-        deviceContext->Release();
+        deviceContext.Reset();
     if (rtView)
-        rtView->Release();
-}
+        rtView.Reset();
+    if (swapChain)
+        swapChain.Reset();
+    if (device)
+        device.Reset();
 
-struct ShaderVariablesBufferData
-{
-    ID3D11Buffer* buffer;
-    u8* data;
-    size_t dataSizeBytes;
-    ConstantBufferType type;
-};
+    for (auto& buffer : vertexBuffers)
+        buffer.Reset();
+    for (auto& buffer : indexBuffers)
+        buffer.Reset();
+    for (auto& cb : constantBuffers)
+        cb.buffer.Reset();
+    for (auto& shader : shaders)
+    {
+        shader.vs.Reset();
+        shader.ps.Reset();
+        shader.layout.Reset();
+    }
+    for (auto& state : rasterizerStates)
+        state.Reset();
 
-static void writeShaderVariablesBuffer(ShaderVariablesBufferData bd)
-{
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-
-    HR_ASSERT(deviceContext->Map(bd.buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
-
-    memcpy((uint8_t*)mappedResource.pData, bd.data, bd.dataSizeBytes);
-
-    deviceContext->Unmap(bd.buffer, 0);
-    if (bd.type == ConstantBufferType::VertexShader)
-        deviceContext->VSSetConstantBuffers(0, 1, &bd.buffer);
-    else
-        deviceContext->PSSetConstantBuffers(1, 1, &bd.buffer);
+    if (deviceContext)
+    {
+        deviceContext->ClearState();
+        deviceContext->Flush();
+    }
 }
 
 static void writeShaderVariables(ShaderType shader, const ShaderVariable* variables, size_t variablesCount)
@@ -323,22 +333,19 @@ static void writeShaderVariables(ShaderType shader, const ShaderVariable* variab
     if (shader >= ShaderType::Max)
         LOGIC_ERROR();
 
-    auto buffers = constantBuffers[(i32)shader];
+    auto buffer = constantBuffers[(i32)shader];
 
-    ShaderVariablesBufferData bdVS{};
-    bdVS.buffer = buffers.vsBuffer;
-    bdVS.type = ConstantBufferType::VertexShader;
-
-    ShaderVariablesBufferData bdPS{};
-    bdPS.buffer = buffers.psBuffer;
-    bdPS.type = ConstantBufferType::PixelShader;
-
+    size_t dataSizeBytes = 0;
+    u8* data = nullptr;
     if (shader == ShaderType::Basic)
     {
-        bdVS.dataSizeBytes = sizeof(Shaders::Basic::VariablesVS);
-        bdVS.data = (u8*)alloca(bdVS.dataSizeBytes);
-        bdPS.dataSizeBytes = sizeof(Shaders::Basic::VariablesPS);
-        bdPS.data = (u8*)alloca(bdPS.dataSizeBytes);
+        dataSizeBytes = sizeof(Shaders::Basic::Variables);
+        data = (u8*)alloca(dataSizeBytes);
+    }
+    else if (shader == ShaderType::Unlit)
+    {
+        dataSizeBytes = sizeof(Shaders::Unlit::Variables);
+        data = (u8*)alloca(dataSizeBytes);
     }
 
     for (size_t i = 0; i < variablesCount; ++i)
@@ -347,18 +354,24 @@ static void writeShaderVariables(ShaderType shader, const ShaderVariable* variab
         if (!variable.name)
             continue;
 
-        const auto mapping = find(buffers.mappings,
+        const auto mapping = find(buffer.mappings,
             MAX_SHADER_VARIABLES,
             [variable](auto const& mapping) { return strncmp(mapping.name, variable.name, 256) == 0; });
         if (mapping)
         {
-            const auto data = mapping->bufferType == ConstantBufferType::VertexShader ? bdVS.data : bdPS.data;
             memcpy(data + mapping->offsetBytes, &variable.value, mapping->sizeBytes);
         }
     }
 
-    writeShaderVariablesBuffer(bdVS);
-    writeShaderVariablesBuffer(bdPS);
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HR_ASSERT(deviceContext->Map(buffer.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+    memcpy((uint8_t*)mappedResource.pData, data, dataSizeBytes);
+
+    deviceContext->Unmap(buffer.buffer.Get(), 0);
+
+    deviceContext->VSSetConstantBuffers(0, 1, buffer.buffer.GetAddressOf());
+    deviceContext->PSSetConstantBuffers(0, 1, buffer.buffer.GetAddressOf());
 }
 
 void renderDraw(DrawCommand const& command)
@@ -370,19 +383,20 @@ void renderDraw(DrawCommand const& command)
                                               : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     auto& shader = shaders[(i32)command.shader];
-    deviceContext->IASetInputLayout(shader.layout);
-    deviceContext->VSSetShader(shader.vs, nullptr, 0);
-    deviceContext->PSSetShader(shader.ps, nullptr, 0);
+    deviceContext->IASetInputLayout(shader.layout.Get());
+    deviceContext->VSSetShader(shader.vs.Get(), nullptr, 0);
+    deviceContext->PSSetShader(shader.ps.Get(), nullptr, 0);
 
-    deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState]);
+    deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState].Get());
 
     u32 stride = sizeof(Vertex), offset = 0;
-    deviceContext->IASetVertexBuffers(0, 1, &vertexBuffers[(i32)command.mesh], &stride, &offset);
-    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh], DXGI_FORMAT_R32_UINT, 0);
+    deviceContext->IASetVertexBuffers(0, 1, vertexBuffers[(i32)command.mesh].GetAddressOf(), &stride, &offset);
+    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh].Get(), DXGI_FORMAT_R32_UINT, 0);
     switch (command.mesh)
     {
         case MeshType::Triangle: deviceContext->DrawIndexed(ARR_LENGTH(TRIANGLE_INDICES), 0, 0); break;
         case MeshType::Quad: deviceContext->DrawIndexed(ARR_LENGTH(QUAD_INDICES), 0, 0); break;
+        case MeshType::Cube: deviceContext->DrawIndexed(ARR_LENGTH(CUBE_INDICES), 0, 0); break;
         case MeshType::Sphere: deviceContext->DrawIndexed(ARR_LENGTH(SPHERE_INDICES), 0, 0); break;
         case MeshType::Grid: deviceContext->DrawIndexed(ARR_LENGTH(GRID_INDICES), 0, 0); break;
         default: LOGIC_ERROR();
@@ -391,7 +405,7 @@ void renderDraw(DrawCommand const& command)
 
 void renderClear(glm::vec4 color)
 {
-    deviceContext->ClearRenderTargetView(rtView, &color.x);
+    deviceContext->ClearRenderTargetView(rtView.Get(), &color.x);
 }
 
 void renderPresent()
@@ -414,8 +428,15 @@ void createShaderVariables(DrawCommand& command)
 
 static ShaderVariable* getVariableByName(ShaderVariable* variables, const char* name)
 {
-    auto var = find(variables, MAX_SHADER_VARIABLES, [name](ShaderVariable& var) { return strncmp(var.name, name, 256) == 0; });
-    ENSURE(var != variables + MAX_SHADER_VARIABLES, "shader variable %s not found!", name);
+    auto var = find(variables,
+        MAX_SHADER_VARIABLES,
+        [name](ShaderVariable& var)
+        {
+            if (!var.name)
+                return false;
+            return strncmp(var.name, name, 256) == 0;
+        });
+    ENSURE(var != nullptr);
     return var;
 }
 
@@ -477,9 +498,9 @@ mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName)
     const auto mapping = find(buffers.mappings,
         ARR_LENGTH(buffers.mappings),
         [variableName](auto const& mapping) { return strncmp(mapping.name, variableName, 256) == 0; });
-    ENSURE(mapping != buffers.mappings + ARR_LENGTH(buffers.mappings));
+    ENSURE(mapping != nullptr);
 
-    const auto buffer = mapping->bufferType == ConstantBufferType::VertexShader ? buffers.vsBuffer : buffers.psBuffer;
+    const auto buffer = buffers.buffer;
 
     // Create a staging buffer to read the constant buffer
     D3D11_BUFFER_DESC cbDesc;
@@ -494,7 +515,7 @@ mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName)
     HR_ASSERT(device->CreateBuffer(&stagingDesc, nullptr, &stagingBuffer));
 
     // Copy constant buffer to staging buffer
-    deviceContext->CopyResource(stagingBuffer, buffer);
+    deviceContext->CopyResource(stagingBuffer, buffer.Get());
 
     // Map the staging buffer to read data
     D3D11_MAPPED_SUBRESOURCE mappedResource;

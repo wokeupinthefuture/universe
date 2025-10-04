@@ -123,6 +123,7 @@ struct InputState
         ButtonState leftState;
         ButtonState rightState;
         vec2 pos;
+        vec2 delta;
         bool isCaptured;
     } mouse;
 
@@ -135,4 +136,6 @@ inline InputState* g_input;
 bool isKeyPressed(KeyboardKey key);
 bool wasKeyPressed(KeyboardKey key);
 bool wasKeyReleased(KeyboardKey key);
-bool isMouseDown(bool left);
+bool isMousePressed(bool left);
+bool wasMousePressed(bool left);
+bool wasMouseReleased(bool left);

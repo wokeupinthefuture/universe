@@ -1,4 +1,5 @@
 #include "geometry.hpp"
+#include "platform.hpp"
 
 void generateSphere(
     float radius, u32 stacks, u32 slices, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
@@ -14,12 +15,13 @@ void generateSphere(
         for (unsigned int j = 0; j <= slices; ++j)
         {
             float theta = 2.0f * PI * static_cast<float>(j) / slices;  // Azimuthal angle (0 to 2π)
-            Vertex vertex;
+            Vertex vertex{};
             vertex.pos = vec3{
                 radius * sinPhi * cosf(theta),  // x
                 radius * cosPhi,                // y
                 radius * sinPhi * sinf(theta)   // z
             };
+            ENSURE(vertexCount < verticesCount);
             outVertices[vertexCount++] = vertex;
         }
     }
@@ -41,6 +43,7 @@ void generateSphere(
             // Second triangle (clockwise)
             outIndices[indexCount++] = second;
             outIndices[indexCount++] = second + 1;
+            ENSURE(indexCount < indicesCount);
             outIndices[indexCount++] = first + 1;
         }
     }
@@ -54,11 +57,9 @@ void generateGrid(
     {
         for (int x = 0; x < gridX; x++)
         {
-            outVertices[vertexCount++] = {{
-                x * spacing - (spacing * 0.5 * (gridX - 1)),
-                0.0f,
-                z * spacing - (spacing * 0.5 * (gridY - 1)),
-            }};
+            Vertex vertex{};
+            vertex.pos = {x * spacing - (spacing * 0.5 * (gridX - 1)), 0.0f, z * spacing - (spacing * 0.5 * (gridY - 1))};
+            outVertices[vertexCount++] = vertex;
         }
     }
 
@@ -68,8 +69,9 @@ void generateGrid(
         outIndices[indexCount++] = lineBegin;
         outIndices[indexCount++] = lineEnd;
     }
-    for (int i = 0, lineBegin = 0, lineEnd = gridX * gridY - 1 - (gridX - lineBegin - 1); i < gridX;
-        ++i, lineBegin += gridX * i + gridY, lineEnd = gridX * gridY - 1 - (gridX - lineBegin - 1))
+
+    for (int i = 0, lineBegin = 0, lineEnd = gridX * (gridY - 1) + lineBegin; i < gridX;
+        ++i, ++lineBegin, lineEnd = gridX * (gridY - 1) + lineBegin)
     {
         outIndices[indexCount++] = lineBegin;
         outIndices[indexCount++] = lineEnd;

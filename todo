@@ -1,5 +1,14 @@
+finished:
+constant buffers by field
+grid
 camera mouse controller
-finish grid
-add lights
-check shpere creation
+
+current:
+precompiling shaders
+shared code in shaders
+lights, normals in vertex
+
+todo:
+sphere geometry
+transform hierarchy, reparenting
 make physics

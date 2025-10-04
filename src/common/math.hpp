@@ -24,6 +24,7 @@
 #include "glm/gtc/quaternion.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/quaternion.hpp"
+#include "glm/gtx/compatibility.hpp"
 
 using namespace glm;
 

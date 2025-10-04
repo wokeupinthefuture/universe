@@ -6,15 +6,33 @@
 #include "entity.hpp"
 #include "input.hpp"
 
+struct CameraController
+{
+    static constexpr auto PITCH_YAW_SMOOTHING = 30.f;
+    static constexpr auto DEFAULT_SPEED = 10.f;
+    Entity* camera;
+    bool isPressed;
+    vec2 pressedPos;
+    float speed;
+    float sensitivity;
+    vec3 pitchYaw;
+    vec3 pitchYawTarget;
+    vec3 pitchYawDelta;
+};
+
 struct GameState
 {
     Entity* grid;
     Entity* sphere;
+    Entity* cube;
+    CameraController cameraController;
+    Entity* light;
 };
 
 struct Context
 {
     bool wantsToQuit;
+    bool wantsToReload;
     vec2 windowSize;
     Platform::Window window;
 

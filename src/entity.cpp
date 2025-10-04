@@ -1,4 +1,5 @@
 #include "entity.hpp"
+#include "common/math.hpp"
 #include "renderer.hpp"
 
 static vec3 transformMatrixGetPos(mat4 mat)
@@ -71,11 +72,14 @@ static void calculateCameraView(Entity& camera)
     camera.view = lookAtLH(camera.position, target, up);
 }
 
-static void updateTransform(Entity& entity, Entity& camera)
+void updateTransform(Entity& entity, Entity& camera)
 {
-    const auto model = getWorldMatrix(entity);
+    const auto model = getWorldMatrix(entity);  // aka world matrix
     const auto view = camera.view;
     const auto projection = camera.perspective;
+    ENSURE(entity.drawCommand != nullptr);
+    if (entity.drawCommand->shader == ShaderType::Basic)
+        setShaderVariableMat4(*entity.drawCommand, "world", model);
     setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
 }
 
@@ -83,8 +87,13 @@ static void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
 {
     calculateCameraView(camera);
     for (size_t i = 0; i < entities.size; ++i)
-        if (sameType(entities[i], EntityType::Drawable))
-            updateTransform(entities[i], camera);
+    {
+        auto& entity = entities[i];
+        if (hasType(entity, EntityType::Drawable))
+        {
+            updateTransform(entity, camera);
+        }
+    }
 }
 
 void calculateCameraProjection(Entity& camera, HeapArray<Entity> entities)
@@ -96,7 +105,7 @@ void calculateCameraProjection(Entity& camera, HeapArray<Entity> entities)
 static void updateTransformByType(Entity& entity)
 {
     ENSURE(g_entityManager != nullptr);
-    if ((i32)entity.type & (i32)EntityType::Camera)
+    if (hasType(entity, EntityType::Camera))
     {
         calculateCameraTransform(entity, g_entityManager->entities);
     }
@@ -104,9 +113,25 @@ static void updateTransformByType(Entity& entity)
     {
         updateTransform(entity, g_entityManager->camera);
     }
+
+    if (hasType(entity, EntityType::Light))
+    {
+        if (entity.lightType == LightType::Directional)
+            return;
+
+        for (const auto& drawable : g_entityManager->entities)
+        {
+            if (hasType(drawable, EntityType::Drawable))
+            {
+                ENSURE(drawable.drawCommand != nullptr);
+                if (drawable.drawCommand->shader == ShaderType::Basic)
+                    setShaderVariableVec3(*drawable.drawCommand, "lightPosition", entity.position);
+            }
+        }
+    }
 }
 
-bool sameType(Entity& entity, EntityType type)
+bool hasType(Entity const& entity, EntityType type)
 {
     return (i32)entity.type & (i32)type;
 }
@@ -136,4 +161,66 @@ void setLocalRotation(Entity& entity, vec3 rot)
     entity.euler = rot;
     entity.isWorldMatrixDirty = true;
     updateTransformByType(entity);
+}
+
+void addLocalRotation(Entity& entity, vec3 euler)
+{
+    setLocalRotation(entity, entity.euler + euler);
+}
+
+vec3 getForwardVector(Entity& entity)
+{
+    return getForwardVector(toMat4(entity.rotation));
+}
+vec3 getRightVector(Entity& entity)
+{
+    return getRightVector(toMat4(entity.rotation));
+}
+vec3 getUpVector(Entity& entity)
+{
+    return getUpVector(toMat4(entity.rotation));
+}
+
+constexpr EntityType operator|(EntityType lhs, EntityType rhs)
+{
+    return static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) | static_cast<std::underlying_type_t<EntityType>>(rhs));
+}
+
+constexpr EntityType& operator|=(EntityType& lhs, EntityType rhs)
+{
+    lhs = static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) | static_cast<std::underlying_type_t<EntityType>>(rhs));
+    return lhs;
+}
+
+constexpr EntityType operator&(EntityType lhs, EntityType rhs)
+{
+    return static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) & static_cast<std::underlying_type_t<EntityType>>(rhs));
+}
+
+constexpr EntityType& operator&=(EntityType& lhs, EntityType rhs)
+{
+    lhs = static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) & static_cast<std::underlying_type_t<EntityType>>(rhs));
+    return lhs;
+}
+
+constexpr EntityType operator^(EntityType lhs, EntityType rhs)
+{
+    return static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) ^ static_cast<std::underlying_type_t<EntityType>>(rhs));
+}
+
+constexpr EntityType& operator^=(EntityType& lhs, EntityType rhs)
+{
+    lhs = static_cast<EntityType>(
+        static_cast<std::underlying_type_t<EntityType>>(lhs) ^ static_cast<std::underlying_type_t<EntityType>>(rhs));
+    return lhs;
+}
+
+constexpr EntityType operator~(EntityType rhs)
+{
+    return static_cast<EntityType>(~static_cast<std::underlying_type_t<EntityType>>(rhs));
 }
