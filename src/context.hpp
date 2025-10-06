@@ -27,6 +27,7 @@ struct GameState
     Entity* cube;
     CameraController cameraController;
     Entity* light;
+    Entity* lightOrigin;
 };
 
 struct Context

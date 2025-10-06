@@ -74,3 +74,9 @@ vec3 quatToEuler(quat const& quat)
 
     return vec3(roll, yaw, pitch);
 }
+
+vec3 quatToDirection(quat const& quat, vec3 viewUp)
+{
+    const auto normQuat = normalize(quat);
+    return normQuat * viewUp;
+}

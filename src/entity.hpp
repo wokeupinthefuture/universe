@@ -3,6 +3,8 @@
 #include "common/common.hpp"
 #include "common/heap_array.hpp"
 
+static constexpr auto MAX_ENTITY_CHILDREN = 5;
+
 enum class EntityType
 {
     Default = 1 << 0,
@@ -21,6 +23,7 @@ struct Entity
 {
     const char* name;
     Entity* parent;
+    Entity* children[MAX_ENTITY_CHILDREN];
     bool active;
     EntityType type;
 
@@ -28,6 +31,11 @@ struct Entity
     quat rotation;
     vec3 euler;
     vec3 scale;
+
+    vec3 worldPosition;
+    quat worldRotation;
+    vec3 worldEuler;
+    vec3 worldScale;
 
     mat4 worldMatrixCache;
     bool isWorldMatrixDirty;
@@ -57,7 +65,7 @@ struct EntityManager
 
 inline EntityManager* g_entityManager;
 
-void updateTransform(Entity& entity, Entity& camera);
+void updateTransform(Entity& entity);
 
 void setLocalPosition(Entity& entity, vec3 pos);
 void addLocalPosition(Entity& entity, vec3 pos);

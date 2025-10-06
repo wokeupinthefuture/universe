@@ -4,11 +4,9 @@ grid
 camera mouse controller
 
 current:
-precompiling shaders
-shared code in shaders
-lights, normals in vertex
+point light
+sphere geometry
 
 todo:
-sphere geometry
 transform hierarchy, reparenting
-make physics
+physics

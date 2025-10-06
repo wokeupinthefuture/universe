@@ -94,12 +94,12 @@ target_link_libraries(${GAME_DLL} PUBLIC d3d11)
 target_link_libraries(${GAME_DLL} PUBLIC d3dcompiler)
 
 # post-build events 
-add_custom_command(TARGET ${PLATFORM_EXECUTABLE} POST_BUILD
+add_custom_command(TARGET ${GAME_DLL} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/resources/ $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
 )
 
-add_custom_command(TARGET ${PLATFORM_EXECUTABLE} POST_BUILD
+add_custom_command(TARGET ${GAME_DLL} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_BINARY_DIR}/compile_commands.json
         ${CMAKE_SOURCE_DIR}/compile_commands.json

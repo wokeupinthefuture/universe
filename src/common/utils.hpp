@@ -62,6 +62,17 @@ T* find(T* array, size_t arrayLength, Predicate&& pred)
     return nullptr;
 }
 
+template <typename T, typename Predicate>
+ptrdiff_t findIndex(T* array, size_t arrayLength, Predicate&& pred)
+{
+    for (auto iter = array, end = array + arrayLength; iter != end; ++iter)
+    {
+        if (pred(*iter))
+            return ((ptrdiff_t)iter - (ptrdiff_t)array) / sizeof(T);
+    }
+    return -1;
+}
+
 #include <chrono>
 
 inline float getElapsedTime()

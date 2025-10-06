@@ -6,9 +6,6 @@
 #include <d3dcommon.h>
 #include <d3dcompiler.h>
 
-#include "shaders/dx11/basic.hpp"
-#include "shaders/dx11/unlit.hpp"
-
 #include <wrl/client.h>
 
 using namespace Microsoft::WRL;
@@ -60,17 +57,15 @@ Shader shaders[(i32)ShaderType::Max] = {};
 
 ComPtr<ID3D11RasterizerState> rasterizerStates[(i32)RasterizerState::Max] = {};
 
-static ID3DBlob* compileShader(const char* src, const char* target)
+static ID3DBlob* compileShader(const wchar_t* srcPath, const char* entryPoint, const char* target)
 {
     ID3DBlob* resultBlob = nullptr;
     ID3DBlob* errorBlob = nullptr;
 
-    const auto hr = D3DCompile(src,
-        strlen(src),
-        nullptr,
+    const auto hr = D3DCompileFromFile(srcPath,
         nullptr,
         D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "main",
+        entryPoint,
         target,
         D3DCOMPILE_DEBUG | D3DCOMPILE_ENABLE_STRICTNESS,
         0,
@@ -79,7 +74,7 @@ static ID3DBlob* compileShader(const char* src, const char* target)
 
     if (FAILED(hr))
     {
-        logError("shader %s source: %s", target, src);
+        wprintf(L"shader %hs source path: %ls", target, srcPath);
         logError("shader %s compile error: %s", target, errorBlob->GetBufferPointer());
         errorBlob->Release();
     }
@@ -91,13 +86,13 @@ static ID3DBlob* compileShader(const char* src, const char* target)
     return resultBlob;
 }
 
-static Shader createShader(const char* vsSrc, const char* psSrc)
+static Shader createShader(const wchar_t* path)
 {
     Shader shader;
 
-    const auto vsBlob = compileShader(vsSrc, "vs_5_0");
+    const auto vsBlob = compileShader(path, "VS_Main", "vs_5_0");
     defer({ vsBlob->Release(); });
-    const auto psBlob = compileShader(psSrc, "ps_5_0");
+    const auto psBlob = compileShader(path, "PS_Main", "ps_5_0");
     defer({ psBlob->Release(); });
 
     ID3D11VertexShader* vs = nullptr;
@@ -270,7 +265,7 @@ void renderInit(void* window, float windowWidth, float windowHeight)
         vertexBufferPointers[i] = vertexBuffers[i].Get();
     deviceContext->IASetVertexBuffers(0, (i32)MeshType::Max, vertexBufferPointers, strides, offsets);
 
-    shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::vs, Shaders::Basic::fs);
+    shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::PATH);
     constantBuffers[(i32)ShaderType::Basic] = {.buffer = createConstantBuffer(ShaderType::Basic, D3D11_USAGE_DYNAMIC),
         .mappings = {
             createFieldMapping(Shaders::Basic::Variables, mvp, &Shaders::Basic::DEFAULT_VARIABLES.mvp),
@@ -283,7 +278,7 @@ void renderInit(void* window, float windowWidth, float windowHeight)
             createFieldMapping(Shaders::Basic::Variables, lightType, &Shaders::Basic::DEFAULT_VARIABLES.lightType),
         }};
 
-    shaders[(i32)ShaderType::Unlit] = createShader(Shaders::Unlit::vs, Shaders::Unlit::fs);
+    shaders[(i32)ShaderType::Unlit] = createShader(Shaders::Unlit::PATH);
     constantBuffers[(i32)ShaderType::Unlit] = {.buffer = createConstantBuffer(ShaderType::Unlit, D3D11_USAGE_DYNAMIC),
         .mappings = {
             createFieldMapping(Shaders::Unlit::Variables, mvp, &Shaders::Unlit::DEFAULT_VARIABLES.mvp),

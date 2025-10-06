@@ -29,12 +29,12 @@ static void transformMatrixGetRotation(mat4 mat, vec3 scale, quat& outRot, vec3&
     outEuler = quatToEuler(outRot);
 }
 
-static void matrixToTransform(mat4 mat, vec3& outPos, vec3& outScale, quat& outRot, vec3& outEuler)
-{
-    outPos = transformMatrixGetPos(mat);
-    outScale = transformMatrixGetScale(mat);
-    transformMatrixGetRotation(mat, outScale, outRot, outEuler);
-}
+// static void matrixToTransform(mat4 mat, vec3& outPos, vec3& outScale, quat& outRot, vec3& outEuler)
+// {
+//     outPos = transformMatrixGetPos(mat);
+//     outScale = transformMatrixGetScale(mat);
+//     transformMatrixGetRotation(mat, outScale, outRot, outEuler);
+// }
 
 static mat4 transformToMatrix(vec3 pos, quat rot, vec3 scale_)
 {
@@ -61,6 +61,7 @@ static mat4 getWorldMatrix(Entity& entity)
         entity.worldMatrixCache = localMatrix;
     }
 
+    entity.isWorldMatrixDirty = false;
     return entity.worldMatrixCache;
 }
 
@@ -72,14 +73,14 @@ static void calculateCameraView(Entity& camera)
     camera.view = lookAtLH(camera.position, target, up);
 }
 
-void updateTransform(Entity& entity, Entity& camera)
+static void updateShaderMVP(Entity& entity, Entity& camera)
 {
     const auto model = getWorldMatrix(entity);  // aka world matrix
     const auto view = camera.view;
     const auto projection = camera.perspective;
     ENSURE(entity.drawCommand != nullptr);
     if (entity.drawCommand->shader == ShaderType::Basic)
-        setShaderVariableMat4(*entity.drawCommand, "world", model);
+        setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
     setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
 }
 
@@ -91,7 +92,7 @@ static void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
         auto& entity = entities[i];
         if (hasType(entity, EntityType::Drawable))
         {
-            updateTransform(entity, camera);
+            updateShaderMVP(entity, camera);
         }
     }
 }
@@ -102,17 +103,22 @@ void calculateCameraProjection(Entity& camera, HeapArray<Entity> entities)
     calculateCameraTransform(camera, entities);
 }
 
-static void updateTransformByType(Entity& entity)
+void updateTransform(Entity& entity)
 {
     ENSURE(g_entityManager != nullptr);
     if (hasType(entity, EntityType::Camera))
     {
         calculateCameraTransform(entity, g_entityManager->entities);
     }
-    else
+    else if (hasType(entity, EntityType::Drawable))
     {
-        updateTransform(entity, g_entityManager->camera);
+        updateShaderMVP(entity, g_entityManager->camera);
     }
+
+    const auto worldMatrix = entity.worldMatrixCache;
+    entity.worldPosition = transformMatrixGetPos(worldMatrix);
+    entity.worldScale = transformMatrixGetScale(worldMatrix);
+    transformMatrixGetRotation(worldMatrix, entity.worldScale, entity.worldRotation, entity.worldEuler);
 
     if (hasType(entity, EntityType::Light))
     {
@@ -125,15 +131,19 @@ static void updateTransformByType(Entity& entity)
             {
                 ENSURE(drawable.drawCommand != nullptr);
                 if (drawable.drawCommand->shader == ShaderType::Basic)
-                    setShaderVariableVec3(*drawable.drawCommand, "lightPosition", entity.position);
+                    setShaderVariableVec3(*drawable.drawCommand, "lightPosition", entity.worldPosition);
             }
         }
     }
+
+    for (auto& child : entity.children)
+        if (child)
+            updateTransform(*child);
 }
 
 bool hasType(Entity const& entity, EntityType type)
 {
-    return (i32)entity.type & (i32)type;
+    return bool(entity.type & type);
 }
 
 void addLocalPosition(Entity& entity, vec3 pos)
@@ -145,14 +155,14 @@ void setLocalPosition(Entity& entity, vec3 pos)
 {
     entity.position = pos;
     entity.isWorldMatrixDirty = true;
-    updateTransformByType(entity);
+    updateTransform(entity);
 }
 
 void setLocalScale(Entity& entity, vec3 scale)
 {
     entity.scale = scale;
     entity.isWorldMatrixDirty = true;
-    updateTransformByType(entity);
+    updateTransform(entity);
 }
 
 void setLocalRotation(Entity& entity, vec3 rot)
@@ -160,12 +170,24 @@ void setLocalRotation(Entity& entity, vec3 rot)
     entity.rotation = eulerToQuat(rot);
     entity.euler = rot;
     entity.isWorldMatrixDirty = true;
-    updateTransformByType(entity);
+    updateTransform(entity);
 }
 
 void addLocalRotation(Entity& entity, vec3 euler)
 {
     setLocalRotation(entity, entity.euler + euler);
+}
+
+void setParent(Entity& entity, Entity& parent)
+{
+    const auto childSlot = findIndex(parent.children, MAX_ENTITY_CHILDREN, [](auto& child) { return child == nullptr; });
+    if (childSlot == -1)
+        return;
+
+    entity.parent = &parent;
+    parent.children[childSlot] = &entity;
+
+    updateTransform(entity);
 }
 
 vec3 getForwardVector(Entity& entity)

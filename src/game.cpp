@@ -36,6 +36,12 @@ Entity defaultEntity()
     return e;
 }
 
+Entity* pushEntity(HeapArray<Entity>& entities)
+{
+    auto entity = defaultEntity();
+    return arrayPush(entities, entity);
+}
+
 Entity* pushDrawable(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCmds, MeshType mesh)
 {
     auto entity = defaultEntity();
@@ -58,7 +64,7 @@ Entity* pushLight(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCmds,
     }
 
     setColor(entity, vec4(1, 1, 1, 1));
-    setLocalScale(entity, vec3(0.1f));
+    setLocalScale(entity, vec3(0.25f));
 
     return arrayPush(entities, entity);
 }
@@ -110,12 +116,16 @@ void gameInit(Context& ctx)
     ctx.gameState.cameraController.speed = 1.f;
     ctx.gameState.cameraController.sensitivity = 5.f;
 
+    ctx.gameState.lightOrigin = pushEntity(ctx.entityManager.entities);
+    setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
     ctx.gameState.light = pushLight(ctx.entityManager.entities, ctx.render.drawCommands, LightType::Point);
-    setLocalPosition(*ctx.gameState.light, vec3(0.f, 1.f, 0.f));
-    setLightDirection(*ctx.gameState.light, vec3(0.f, -1.f, 0.f));
+    setParent(*ctx.gameState.light, *ctx.gameState.lightOrigin);
+    setLocalPosition(*ctx.gameState.light, vec3(0, 0, 2));
+    // setLightDirection(*ctx.gameState.light, vec3(0.f, -1.f, 0.f));
 
     for (auto& entity : ctx.entityManager.entities)
-        updateTransform(entity, ctx.entityManager.camera);
+        if (hasType(entity, EntityType::Drawable))
+            updateTransform(entity);
 }
 
 void gamePreHotReload(Context& ctx)
@@ -130,8 +140,6 @@ void gamePostHotReload(Context& ctx)
 
 void cameraControllerMoveAndRotate(CameraController& controller)
 {
-    using namespace Platform;
-
     const auto dt = 0.016f;
 
     controller.speed = CameraController::DEFAULT_SPEED;
@@ -219,8 +227,20 @@ void gameUpdateAndRender(Context& ctx)
 
     cameraControllerUpdate(ctx.input, ctx.gameState.cameraController);
 
-    const auto speed = 1;
-    addLocalRotation(*ctx.gameState.cube, vec3(speed));
+    const auto speed = 0.75;
+    static bool pause = false;
+    if (!pause)
+    {
+        addLocalRotation(*ctx.gameState.lightOrigin, vec3(0, speed, 0));
+        // setLightDirection(*ctx.gameState.light, quatToDirection(ctx.gameState.light->rotation));
+        // addLocalRotation(*ctx.gameState.cube, vec3(0, 0, speed));
+        // logInfo("%f, %f, %f light world pos",
+        //     ctx.gameState.light->worldPosition.x,
+        //     ctx.gameState.light->worldPosition.y,
+        //     ctx.gameState.light->worldPosition.z);
+    }
+    if (wasKeyPressed(KeyboardKey::KEY_P))
+        pause = !pause;
 
     if (isKeyPressed(KeyboardKey::KEY_1))
     {
