@@ -1,8 +1,8 @@
 #pragma once
 
 #include "context.hpp"
-#include "input.hpp"
 #include "platform.hpp"
+#include "input.hpp"
 
 #include <cstring>
 
@@ -236,22 +236,22 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
     {
         case WM_RBUTTONDOWN:
         {
-            g_input->mouse.rightState = ButtonState::Pressed;
+            data.input->mouse.rightState = ButtonState::Pressed;
             break;
         }
         case WM_RBUTTONUP:
         {
-            g_input->mouse.rightState = ButtonState::Released;
+            data.input->mouse.rightState = ButtonState::Released;
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            g_input->mouse.leftState = ButtonState::Pressed;
+            data.input->mouse.leftState = ButtonState::Pressed;
             break;
         }
         case WM_LBUTTONUP:
         {
-            g_input->mouse.leftState = ButtonState::Released;
+            data.input->mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -266,13 +266,13 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             if (isDown)
             {
                 if (wasDown != isDown)
-                    g_input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
+                    data.input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
                 else
-                    g_input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
+                    data.input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
             }
             else
             {
-                g_input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
+                data.input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
             }
             break;
         }
@@ -281,8 +281,8 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
             vec2 mousePos = {(float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam)};
-            g_input->mouse.delta = g_input->mouse.pos - mousePos;
-            g_input->mouse.pos = mousePos;
+            data.input->mouse.delta = data.input->mouse.pos - mousePos;
+            data.input->mouse.pos = mousePos;
             break;
         }
         case WM_KILLFOCUS:
@@ -295,7 +295,14 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case WM_CLOSE:
         {
             PostQuitMessage(0);
-            windowShouldClose = true;
+            data.windowShouldClose = true;
+            break;
+        }
+        case WM_SIZE:
+        {
+            RECT rect;
+            GetWindowRect(hwnd, &rect);
+            data.screenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
             break;
         }
 
@@ -321,20 +328,8 @@ Window openWindow(int width, int height, const char* name)
 
     RegisterClassEx(&wc);
 
-    const auto hwnd = CreateWindowEx(0,
-        name,
-        name,
-        WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
-
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        width,
-        height,
-
-        nullptr,
-        nullptr,
-        hInst,
-        nullptr);
+    const auto hwnd = CreateWindowEx(
+        0, name, name, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, hInst, nullptr);
 
     ShowWindow(hwnd, SW_SHOW);
 

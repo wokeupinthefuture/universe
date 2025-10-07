@@ -1,11 +1,13 @@
 finished:
 constant buffers by field
-grid
+grid mesh
 camera mouse controller
+directional light
+resizable window/viewport
 
 current:
 point light
-sphere geometry
+sphere geometry normals
 
 todo:
 transform hierarchy, reparenting

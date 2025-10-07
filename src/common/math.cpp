@@ -80,3 +80,38 @@ vec3 quatToDirection(quat const& quat, vec3 viewUp)
     const auto normQuat = normalize(quat);
     return normQuat * viewUp;
 }
+
+vec3 matrixExtractPosition(mat4 mat)
+{
+    return {mat[3][0], mat[3][1], mat[3][2]};
+}
+
+vec3 matrixExtractScale(mat4 mat)
+{
+    vec3 scale{};
+    scale.x = std::sqrt(mat[1][0] * mat[0][0] + mat[1][0] * mat[1][0] + mat[2][0] * mat[2][0]) * signum(mat[0][0]);
+    scale.y = std::sqrt(mat[0][1] * mat[0][1] + mat[1][1] * mat[1][1] + mat[2][1] * mat[2][1]) * signum(mat[1][1]);
+    scale.z = std::sqrt(mat[0][2] * mat[0][2] + mat[1][2] * mat[1][2] + mat[2][2] * mat[2][2]) * signum(mat[2][2]);
+    return scale;
+}
+
+mat4 transformToMatrix(vec3 position, quat rotation, vec3 _scale)
+{
+    const auto scaleMatrix = scale(mat4(1.f), _scale);
+    const auto rotMatrix = toMat4(rotation);
+    const auto posMatrix = translate(mat4(1.f), position);
+    return posMatrix * rotMatrix * scaleMatrix;
+}
+
+void matrixExtractRotation(mat4 mat, vec3 scale, quat& outRot, vec3& outEuler)
+{
+    auto rotationMatrix = mat;
+    rotationMatrix[3][0] = 0;
+    rotationMatrix[3][1] = 0;
+    rotationMatrix[3][2] = 0;
+    rotationMatrix[0] /= vec4{scale.x, scale.y, scale.z, 1.0};
+    rotationMatrix[1] /= vec4{scale.x, scale.y, scale.z, 1.0};
+    rotationMatrix[2] /= vec4{scale.x, scale.y, scale.z, 1.0};
+    outRot = toQuat(rotationMatrix);
+    outEuler = quatToEuler(outRot);
+}

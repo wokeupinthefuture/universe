@@ -24,6 +24,8 @@ static constexpr auto MAX_DRAW_COMMANDS = 10;
 
 struct RenderState
 {
+    bool needsToResize;
+    vec2 screenSize;
     HeapArray<DrawCommand> drawCommands;
 };
 
@@ -50,6 +52,6 @@ inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType m
     return arrayPush(drawCommands, cmd);
 }
 
+void renderClearAndResize(RenderState& state, glm::vec4 color);
 void renderDraw(DrawCommand const& command);
-void renderClear(glm::vec4 color);
 void renderPresent();

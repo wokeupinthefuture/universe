@@ -40,14 +40,14 @@
     } while (0)
 #endif
 
+struct InputState;
+
 namespace Platform
 {
 
 using Window = void*;
 Window openWindow(int width, int height, const char* name);
 void closeWindow(Window window);
-
-inline bool windowShouldClose;
 
 void pollEvents();
 
@@ -62,5 +62,15 @@ void* loadDynamicLib(const char* dllName);
 void unloadDynamicLib(void* lib);
 void* loadDynamicFunc(void* dll, const char* funcName);
 #define Platform_loadDynamicFunc(lib, funcName) decltype (&funcName)(Platform::loadDynamicFunc((lib), (#funcName)))
+
+struct PlatformData
+{
+    bool windowShouldClose;
+    InputState* input;
+    vec2 lastScreenSize;
+    vec2 screenSize;
+};
+
+inline PlatformData data;
 
 }  // namespace Platform

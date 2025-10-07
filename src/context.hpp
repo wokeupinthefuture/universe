@@ -34,7 +34,7 @@ struct Context
 {
     bool wantsToQuit;
     bool wantsToReload;
-    vec2 windowSize;
+    vec2 initialWindowSize;
     Platform::Window window;
 
     Arena permanentMemory;

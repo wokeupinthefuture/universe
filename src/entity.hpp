@@ -2,6 +2,7 @@
 
 #include "common/common.hpp"
 #include "common/heap_array.hpp"
+#include "input.hpp"
 
 static constexpr auto MAX_ENTITY_CHILDREN = 5;
 
@@ -41,6 +42,7 @@ struct Entity
     bool isWorldMatrixDirty;
 
     // camera
+    float defaultFov;
     float fov;
     float aspect;
     float nearZ;
@@ -63,7 +65,9 @@ struct EntityManager
     HeapArray<Entity> entities;
 };
 
-inline EntityManager* g_entityManager;
+void setInternalPointer(EntityManager& manager);
+
+HeapArray<Entity>& getEntities();
 
 void updateTransform(Entity& entity);
 

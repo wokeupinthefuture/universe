@@ -188,6 +188,24 @@ static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
     return rasterizerState;
 }
 
+static void createScreenRenderTarget(vec2 size)
+{
+    ComPtr<ID3D11Resource> backbuffer{};
+    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
+    HR_ASSERT(device->CreateRenderTargetView(backbuffer.Get(), nullptr, &rtView));
+
+    deviceContext->OMSetRenderTargets(1, rtView.GetAddressOf(), nullptr);
+
+    D3D11_VIEWPORT vp{};
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    vp.Width = size.x;
+    vp.Height = size.y;
+    vp.MinDepth = 0.f;
+    vp.MaxDepth = 1.f;
+    deviceContext->RSSetViewports(1, &vp);
+}
+
 void renderInit(void* window, float windowWidth, float windowHeight)
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc{};
@@ -214,20 +232,7 @@ void renderInit(void* window, float windowWidth, float windowHeight)
         nullptr,
         &deviceContext));
 
-    ComPtr<ID3D11Resource> backbuffer{};
-    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
-    HR_ASSERT(device->CreateRenderTargetView(backbuffer.Get(), nullptr, &rtView));
-
-    deviceContext->OMSetRenderTargets(1, rtView.GetAddressOf(), nullptr);
-
-    D3D11_VIEWPORT vp{};
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
-    vp.Width = windowWidth;
-    vp.Height = windowHeight;
-    vp.MinDepth = 0.f;
-    vp.MaxDepth = 1.f;
-    deviceContext->RSSetViewports(1, &vp);
+    createScreenRenderTarget({windowWidth, windowHeight});
 
     vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(TRIANGLE_VERTICES, ARR_LENGTH(TRIANGLE_VERTICES));
     indexBuffers[(i32)MeshType::Triangle] = createIndexBuffer(TRIANGLE_INDICES, ARR_LENGTH(TRIANGLE_INDICES));
@@ -398,12 +403,22 @@ void renderDraw(DrawCommand const& command)
     }
 }
 
-void renderClear(glm::vec4 color)
+void renderClearAndResize(RenderState& state, glm::vec4 color)
 {
+    if (state.needsToResize)
+    {
+        deviceContext->OMSetRenderTargets(0, 0, nullptr);
+        rtView->Release();
+        HR_ASSERT(swapChain->ResizeBuffers(0, state.screenSize.x, state.screenSize.y, DXGI_FORMAT_UNKNOWN, 0));
+        createScreenRenderTarget(state.screenSize);
+
+        state.needsToResize = false;
+    }
+
     deviceContext->ClearRenderTargetView(rtView.Get(), &color.x);
 }
 
-void renderPresent()
+void renderPresentAndResize()
 {
     swapChain->Present(1, 0);
 }

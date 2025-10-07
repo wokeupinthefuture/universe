@@ -131,8 +131,7 @@ struct InputState
     ButtonState prevKeyboard[(int)KeyboardKey::KEY_MAX];
 };
 
-inline InputState* g_input;
-
+void setInternalPointer(InputState* state);
 bool isKeyPressed(KeyboardKey key);
 bool wasKeyPressed(KeyboardKey key);
 bool wasKeyReleased(KeyboardKey key);

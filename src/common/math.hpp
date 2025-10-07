@@ -38,6 +38,11 @@ quat eulerToQuat(vec3 const& eulerDegrees);
 vec3 quatToEuler(quat const& quat);
 vec3 quatToDirection(quat const& quat, vec3 viewUp = vec3(0, 1, 0));
 
+vec3 matrixExtractPosition(mat4 mat);
+vec3 matrixExtractScale(mat4 mat);
+void matrixExtractRotation(mat4 mat, vec3 scale, quat& outRot, vec3& outEuler);
+mat4 transformToMatrix(vec3 translation, quat rotation, vec3 scale);
+
 template <typename T>
 int signum(T val)
 {

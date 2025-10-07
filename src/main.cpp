@@ -64,7 +64,6 @@ int main()
 {
     Context context{};
     contextInit(context, Megabytes(100), Megabytes(4));
-    g_input = &context.input;
     defer({ contextDeinit(context); });
 
     char directory[256]{};
@@ -72,24 +71,35 @@ int main()
     sprintf(gameCodeRealPath, "%s%s", directory, GAME_DLL_NAME);
     sprintf(gameCodeTempPath, "%s%s", directory, GAME_DLL_NAME_TEMP);
 
-    context.windowSize = vec2(1280, 720);
-    context.window = Platform::openWindow(context.windowSize.x, context.windowSize.y, PROJECT_NAME);
+    context.initialWindowSize = vec2(1280, 720);
+    context.render.screenSize = context.initialWindowSize;
+    Platform::data.screenSize = context.initialWindowSize;
+    Platform::data.input = &context.input;
+    context.window = Platform::openWindow(context.initialWindowSize.x, context.initialWindowSize.y, PROJECT_NAME);
     defer({ Platform::closeWindow(context.window); });
 
     auto game = loadGameCode();
 
     game.init(context);
 
-    while (!Platform::windowShouldClose && !context.wantsToQuit)
+    while (!Platform::data.windowShouldClose && !context.wantsToQuit)
     {
         Platform::pollEvents();
+
+        if ((i32)Platform::data.lastScreenSize.x != (i32)Platform::data.screenSize.x ||
+            (i32)Platform::data.lastScreenSize.y != (i32)Platform::data.screenSize.y)
+        {
+            context.render.screenSize = Platform::data.screenSize;
+            context.render.needsToResize = true;
+        }
+        Platform::data.lastScreenSize = Platform::data.screenSize;
 
         const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
         if (gameLastWrittenTime != game.lastWrittenTime || context.wantsToReload)
         {
             game.preHotReload(context);
 
-            std::this_thread::sleep_for(100ms);
+            std::this_thread::sleep_for(1ms);
 
             unloadGameCode(game);
 

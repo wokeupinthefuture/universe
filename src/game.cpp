@@ -18,7 +18,7 @@ void setColor(Entity& entity, vec4 color)
     if (hasType(entity, EntityType::Light))
     {
         entity.lightColor = color;
-        for (auto& other : g_entityManager->entities)
+        for (auto& other : getEntities())
         {
             if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
                 setShaderVariableVec4(*other.drawCommand, "lightColor", color);
@@ -75,7 +75,7 @@ void setLightDirection(Entity& light, vec3 direction)
 
     light.lightDirection = direction;
 
-    for (const auto& entity : g_entityManager->entities)
+    for (const auto& entity : getEntities())
     {
         if (hasType(entity, EntityType::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
         {
@@ -84,20 +84,26 @@ void setLightDirection(Entity& light, vec3 direction)
     }
 }
 
+void onResize(Entity& camera, vec2 screenSize)
+{
+    calculateCameraProjection(camera, screenSize, getEntities());
+}
+
 void gameInit(Context& ctx)
 {
     logInfo("game init");
-    g_input = &ctx.input;
-    g_entityManager = &ctx.entityManager;
+    setInternalPointer(&ctx.input);
+    setInternalPointer(&ctx.entityManager);
 
-    renderInit(ctx.window, ctx.windowSize.x, ctx.windowSize.y);
+    renderInit(ctx.window, ctx.render.screenSize.x, ctx.render.screenSize.y);
 
     auto camera = defaultEntity();
     camera.type = EntityType::Camera;
-    camera.fov = 45.f;
-    camera.aspect = 16.f / 9.f;
+    camera.defaultFov = 45.f;
     camera.nearZ = 0.001f;
     camera.farZ = 1000.f;
+
+    onResize(camera, ctx.render.screenSize);
 
     ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Grid);
     ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Sphere);
@@ -106,10 +112,8 @@ void gameInit(Context& ctx)
     setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
     setColor(*ctx.gameState.sphere, vec4(0.2f, 1.f, 0.5f, 1.f));
 
-    calculateCameraProjection(camera, ctx.entityManager.entities);
     setLocalPosition(camera, vec3(0, 0, -5));
-
-    g_entityManager->camera = camera;
+    ctx.entityManager.camera = camera;
 
     ctx.gameState.cameraController = {};
     ctx.gameState.cameraController.camera = &ctx.entityManager.camera;
@@ -256,11 +260,16 @@ void gameUpdateAndRender(Context& ctx)
         ctx.wantsToReload = true;
     }
 
+    if (ctx.render.needsToResize)
+    {
+        onResize(ctx.entityManager.camera, ctx.render.screenSize);
+    }
+
     static vec4 clearColor{0, 0, 0, 1};
-    renderClear(clearColor);
+    renderClearAndResize(ctx.render, clearColor);
     for (const auto& command : ctx.render.drawCommands)
         renderDraw(command);
-    renderPresent();
+    renderPresentAndResize();
 
     for (auto& kb : ctx.input.keyboard)
     {
