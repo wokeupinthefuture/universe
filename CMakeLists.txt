@@ -81,8 +81,9 @@ function (use_shared_lib lib)
 
     target_link_libraries(${PLATFORM_EXECUTABLE} PUBLIC ${lib})
     target_link_libraries(${GAME_DLL} PUBLIC ${lib})
-
 endfunction()
+
+include_directories(PUBLIC "third_party")
 
 set(BUILD_SHARED_LIBS ON)
 use_shared_lib(imgui)

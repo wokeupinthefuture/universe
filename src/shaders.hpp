@@ -11,8 +11,6 @@ void setShaderVariableVec3(DrawCommand& command, const char* variableName, vec3 
 void setShaderVariableVec4(DrawCommand& command, const char* variableName, vec4 value);
 void setShaderVariableMat4(DrawCommand& command, const char* variableName, mat4 value);
 
-mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName);
-
 enum class ShaderType
 {
     Basic,
@@ -38,10 +36,8 @@ struct ShaderVariable
     ShaderVariableValue value;
 };
 
-namespace Shaders::Basic
+namespace Shaders
 {
-
-static constexpr auto PATH = L"resources/shaders/dx11/basic.hlsl";
 
 struct Variables
 {
@@ -56,6 +52,7 @@ struct Variables
     int lightType;
     float _padding1[3];
 };
+
 static_assert(sizeof(Variables) % 16 == 0, "Constant buffer size must be a multiple of 16 bytes");
 
 static constexpr Variables DEFAULT_VARIABLES = {
@@ -70,22 +67,15 @@ static constexpr Variables DEFAULT_VARIABLES = {
     .lightType = 0,
     ._padding1 = {},
 };
-}  // namespace Shaders::Basic
 
-namespace Shaders::Unlit
+namespace Basic
 {
+static constexpr auto PATH = L"resources/shaders/dx11/basic.hlsl";
+}
 
+namespace Unlit
+{
 static constexpr auto PATH = L"resources/shaders/dx11/unlit.hlsl";
+}
 
-struct Variables
-{
-    float mvp[4][4];
-    float objectColor[4];
-    float time;
-    float _padding0[3];
-};
-static_assert(sizeof(Variables) % 16 == 0, "Constant buffer size must be a multiple of 16 bytes");
-
-static constexpr Variables DEFAULT_VARIABLES = {.mvp = {}, .objectColor = {0.5f, 0.f, 0.5f, 1.f}, .time = {}, ._padding0 = {}};
-
-}  // namespace Shaders::Unlit
+}  // namespace Shaders

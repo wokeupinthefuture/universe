@@ -115,3 +115,21 @@ void matrixExtractRotation(mat4 mat, vec3 scale, quat& outRot, vec3& outEuler)
     outRot = toQuat(rotationMatrix);
     outEuler = quatToEuler(outRot);
 }
+
+vec3 clampedScale(vec3 scale)
+{
+    if (scale.x == 0)
+    {
+        scale.x = 0.00001f;
+    }
+    if (scale.y == 0)
+    {
+        scale.y = 0.00001f;
+    }
+    if (scale.z == 0)
+    {
+        scale.z = 0.00001f;
+    }
+
+    return scale;
+}

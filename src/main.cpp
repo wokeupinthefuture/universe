@@ -1,4 +1,5 @@
 #include "context.hpp"
+#include "entity.hpp"
 #include "game.hpp"
 
 #include "platform_win32.cpp"
@@ -65,34 +66,35 @@ int main()
     Context context{};
     contextInit(context, Megabytes(100), Megabytes(4));
     defer({ contextDeinit(context); });
+    Platform::setInternalPointer(context.platform, context.input);
 
     char directory[256]{};
     Platform::getExeDirectory(directory);
     sprintf(gameCodeRealPath, "%s%s", directory, GAME_DLL_NAME);
     sprintf(gameCodeTempPath, "%s%s", directory, GAME_DLL_NAME_TEMP);
 
-    context.initialWindowSize = vec2(1280, 720);
-    context.render.screenSize = context.initialWindowSize;
-    Platform::data.screenSize = context.initialWindowSize;
-    Platform::data.input = &context.input;
-    context.window = Platform::openWindow(context.initialWindowSize.x, context.initialWindowSize.y, PROJECT_NAME);
-    defer({ Platform::closeWindow(context.window); });
+    static constexpr vec2 INITIAL_WINDOW_SIZE = vec2(1280, 720);
+    context.render.screenSize = INITIAL_WINDOW_SIZE;
+    context.platform.screenSize = INITIAL_WINDOW_SIZE;
+    context.platform.window = Platform::openWindow(INITIAL_WINDOW_SIZE.x, INITIAL_WINDOW_SIZE.y, PROJECT_NAME);
+    context.platform.dpi = Platform::getDpi();
+    defer({ Platform::closeWindow(context.platform.window); });
 
     auto game = loadGameCode();
 
     game.init(context);
 
-    while (!Platform::data.windowShouldClose && !context.wantsToQuit)
+    while (!context.platform.windowShouldClose && !context.wantsToQuit)
     {
         Platform::pollEvents();
 
-        if ((i32)Platform::data.lastScreenSize.x != (i32)Platform::data.screenSize.x ||
-            (i32)Platform::data.lastScreenSize.y != (i32)Platform::data.screenSize.y)
+        if ((i32)context.platform.lastScreenSize.x != (i32)context.platform.screenSize.x ||
+            (i32)context.platform.lastScreenSize.y != (i32)context.platform.screenSize.y)
         {
-            context.render.screenSize = Platform::data.screenSize;
+            context.render.screenSize = context.platform.screenSize;
             context.render.needsToResize = true;
         }
-        Platform::data.lastScreenSize = Platform::data.screenSize;
+        context.platform.lastScreenSize = context.platform.screenSize;
 
         const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
         if (gameLastWrittenTime != game.lastWrittenTime || context.wantsToReload)
@@ -103,10 +105,7 @@ int main()
 
             unloadGameCode(game);
 
-            arrayClear(context.entityManager.entities);
-            arrayClear(context.render.drawCommands);
-            arenaFreeAll(context.permanentMemory);
-            arenaFreeAll(context.tempMemory);
+            contextClear(context);
 
             std::this_thread::sleep_for(1ms);
 

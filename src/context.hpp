@@ -2,9 +2,11 @@
 
 #include "common/memory.hpp"
 #include "common/heap_array.hpp"
+#include "platform.hpp"
 #include "renderer.hpp"
 #include "entity.hpp"
 #include "input.hpp"
+#include "gui.hpp"
 
 struct CameraController
 {
@@ -32,29 +34,43 @@ struct GameState
 
 struct Context
 {
+    bool pause;
+    float timeScale;
+    float dt;
+
     bool wantsToQuit;
     bool wantsToReload;
-    vec2 initialWindowSize;
-    Platform::Window window;
 
     Arena permanentMemory;
     Arena tempMemory;
 
+    PlatformToGameBuffer platform;
     InputState input;
     RenderState render;
-
     EntityManager entityManager;
-
     GameState gameState;
+    GuiState gui;
 };
 
 inline void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
 {
+    context.timeScale = 1.f;
+    context.dt = 0.016f;
+
     arenaInit(context.permanentMemory, memorySize);
     arenaInit(context.tempMemory, tempMemorySize);
 
     arrayAlloc(context.render.drawCommands, context.permanentMemory);
     arrayAlloc(context.entityManager.entities, context.permanentMemory);
+}
+
+inline void contextClear(Context& context)
+{
+    arrayClear(context.entityManager.entities);
+    arrayClear(context.render.drawCommands);
+
+    arenaFreeAll(context.permanentMemory);
+    arenaFreeAll(context.tempMemory);
 }
 
 inline void contextDeinit(Context& context)

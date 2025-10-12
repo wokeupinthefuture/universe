@@ -48,3 +48,5 @@ int signum(T val)
 {
     return (T(0) < val) - (val < T(0));
 }
+
+vec3 clampedScale(vec3 scale);

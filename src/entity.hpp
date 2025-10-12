@@ -55,8 +55,10 @@ struct Entity
 
     // light
     vec3 lightDirection;
-    vec3 lightColor;
+    vec4 lightColor;
     LightType lightType;
+
+    bool guiIsLocal;
 };
 
 struct EntityManager

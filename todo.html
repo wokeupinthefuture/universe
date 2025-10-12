@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stream To-Do List</title>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      background: #181b1f;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      justify-content: flex-end;
+      align-items: flex-start;
+    }
+    .container {
+      background: rgba(22, 22, 29, 0.9);
+      box-shadow: 0 4px 32px 0 rgba(0,0,0,0.28);
+      border-radius: 8px;
+      padding: 0 10px 10px 0px;
+      min-width: 275px;
+      max-width: 275px;
+      /* min-height: 290px; */
+      /* max-height: 350px; */
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      font-family: 'Liberation Mono', monospace;
+      color: #8992a7;
+    }
+    .section-title {
+      color: #c4746e;
+      font-weight: 600;
+      font-size: 0.92em;
+      line-height: 1.2em;
+      margin: 18px 0 0 0;
+      letter-spacing: 0.07em;
+      text-shadow: 0 2px 8px #1a180b44;
+    }
+    .section-title:first-child {
+      margin-top: 2px;
+    }
+    ul {
+      margin: 0 0 0 0.7em;
+      padding: 0;
+      list-style: none;
+    }
+    li { margin: 0 0 2px 0; padding: 0; }
+    .finished {
+      color: #757575;
+      text-decoration: line-through;
+      font-size: 1em;
+      line-height: 1.45em;
+    }
+    .current {
+      color: #8a9a7b;
+      font-weight: 600;
+      font-size: 1em;
+      line-height: 1.45em;
+    }
+    .todo {
+      color: #8992a7;
+      font-size: 1em;
+      line-height: 1.45em;
+    }
+    .main-list {
+      margin: 10px 0px 0px 0px;
+      padding: 0;
+      list-style: none;
+      /* min-height: 220px; */
+      /* max-height: 260px; */
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: stretch;
+      width: 100%;
+      gap: 0;
+    }
+    .main-list li {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      /* min-height: 2em; */
+      padding: 0.275em 0.3em;
+      font-size: 1em;
+      border-radius: 3px;
+      transition: background 0.15s, color 0.15s;
+      text-align: right;
+      margin-bottom: 3px;
+    }
+    .main-list li:last-child {
+      margin-bottom: 0;
+    }
+    .completed-item {
+      color: #757575;
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+    .current-item {
+      color: #e6c384;
+      background: #223249;
+      font-weight: 700;
+      font-size: 1.09em;
+      box-shadow: 0 3px 10px 0 rgba(34,48,73,0.10);
+      border-left: none;
+      border-right: 3px solid #e6c384;
+      z-index: 1;
+    }
+    .todo-item {
+      color: #8992a7;
+      opacity: 0.97;
+      font-weight: 500;
+    }
+    .placeholder-item {
+      opacity: 0.23;
+      pointer-events: none;
+      background: transparent;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="todo-container">
+    Loading...
+  </div>
+  <script>
+    /*
+    New JSON structure:
+    {
+      completed: [ ... ],
+      current: "...",
+      todo: [ ... ]
+    }
+    */
+    const VISIBLE_ITEMS = 7; // fixed list size
+    async function fetchAndRenderTodo() {
+      const container = document.getElementById('todo-container');
+      try {
+        const res = await fetch('todo.json?' + new Date().getTime());
+        const data = await res.json();
+        const completed = Array.isArray(data.completed) ? data.completed : [];
+        const current = data.current || '';
+        const todo = Array.isArray(data.todo) ? data.todo : [];
+
+        let center = Math.floor(VISIBLE_ITEMS / 2);
+        let before = completed.slice(-center);
+        if (before.length < center) {
+          before = Array(center - before.length).fill('').concat(before);
+        }
+        let after = todo.slice(0, VISIBLE_ITEMS - before.length - 1);
+        if (after.length < VISIBLE_ITEMS - before.length - 1) {
+          after = after.concat(Array(VISIBLE_ITEMS - before.length - 1 - after.length).fill(''));
+        }
+        const items = before.concat([current], after);
+
+        let html = '<ul class="main-list">';
+        for (let i = 0; i < items.length; ++i) {
+          let cls = '';
+          if (i < center && items[i]) cls = 'completed-item';
+          else if (i == center) cls = 'current-item';
+          else if (items[i]) cls = 'todo-item';
+          else cls = 'placeholder-item';
+          html += `<li class="${cls}">${items[i] || '&nbsp;'}</li>`;
+        }
+        html += '</ul>';
+        container.innerHTML = html;
+      } catch (e) {
+        container.innerHTML = '<span style="color:#e86969">Failed to load todo list.</span>';
+      }
+    }
+    fetchAndRenderTodo();
+    setInterval(fetchAndRenderTodo, 3000);
+  </script>
+</body>
+</html>

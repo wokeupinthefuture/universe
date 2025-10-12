@@ -1,4 +1,4 @@
-cbuffer BasicCB : register(b0)
+cbuffer Variables : register(b0)
 {
     float4x4 world;
     float4x4 mvp;
@@ -10,13 +10,6 @@ cbuffer BasicCB : register(b0)
     int lightType;
 }
 
-cbuffer UnlitCB : register(b0)
-{
-    float4x4 ul_mvp;
-    float4 ul_objectColor;
-    float ul_time;
-}
-
 struct VSInput
 {
     float3 pos : POSITION;
@@ -25,6 +18,7 @@ struct VSInput
 
 struct PSInput
 {
-    float4 pos : SV_POSITION;
+    float4 clipPos : SV_POSITION;
+    float3 worldPos : WPOSITION;
     float3 worldNormal : NORMAL;
 };

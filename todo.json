@@ -1,0 +1,18 @@
+{
+  "completed": [
+    "constant buffers by field",
+    "grid mesh",
+    "camera mouse controller",
+    "directional light",
+    "resizable window/viewport",
+    "shared constant buffer",
+    "integrate imgui",
+    "point light"
+  ],
+  "current": "sphere geometry normals",
+  "todo": [
+    "reparenting, world transform setters",
+    "gravity physics",
+    "fancy shaders for a planet/star shape"
+  ]
+}

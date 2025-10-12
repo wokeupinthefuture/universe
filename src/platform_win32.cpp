@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.hpp"
+#include "entity.hpp"
 #include "platform.hpp"
 #include "input.hpp"
 
@@ -13,6 +14,13 @@
 
 namespace Platform
 {
+
+static PlatformToGameBuffer* buffer;
+void setInternalPointer(PlatformToGameBuffer& _buffer, InputState& _input)
+{
+    buffer = &_buffer;
+    buffer->input = &_input;
+}
 
 static int resolveKeyMapping(KeyboardKey key)
 {
@@ -232,26 +240,30 @@ static KeyboardKey translateKeyMapping(int vkKey)
 
 static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
+    if (buffer->guiWindowEventCallback)
+        if (((WNDPROC)buffer->guiWindowEventCallback)(hwnd, uMsg, wParam, lParam))
+            return true;
+
     switch (uMsg)
     {
         case WM_RBUTTONDOWN:
         {
-            data.input->mouse.rightState = ButtonState::Pressed;
+            buffer->input->mouse.rightState = ButtonState::Pressed;
             break;
         }
         case WM_RBUTTONUP:
         {
-            data.input->mouse.rightState = ButtonState::Released;
+            buffer->input->mouse.rightState = ButtonState::Released;
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            data.input->mouse.leftState = ButtonState::Pressed;
+            buffer->input->mouse.leftState = ButtonState::Pressed;
             break;
         }
         case WM_LBUTTONUP:
         {
-            data.input->mouse.leftState = ButtonState::Released;
+            buffer->input->mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -266,13 +278,13 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             if (isDown)
             {
                 if (wasDown != isDown)
-                    data.input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
+                    buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
                 else
-                    data.input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
+                    buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
             }
             else
             {
-                data.input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
+                buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
             }
             break;
         }
@@ -281,8 +293,8 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
             vec2 mousePos = {(float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam)};
-            data.input->mouse.delta = data.input->mouse.pos - mousePos;
-            data.input->mouse.pos = mousePos;
+            buffer->input->mouse.delta = buffer->input->mouse.pos - mousePos;
+            buffer->input->mouse.pos = mousePos;
             break;
         }
         case WM_KILLFOCUS:
@@ -295,14 +307,14 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case WM_CLOSE:
         {
             PostQuitMessage(0);
-            data.windowShouldClose = true;
+            buffer->windowShouldClose = true;
             break;
         }
         case WM_SIZE:
         {
             RECT rect;
-            GetWindowRect(hwnd, &rect);
-            data.screenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
+            GetClientRect(hwnd, &rect);
+            buffer->screenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
             break;
         }
 
@@ -392,6 +404,18 @@ u64 getFileLastWrittenTime(const char* filePath)
 void copyFile(const char* src, const char* dst)
 {
     CopyFile(src, dst, false);
+}
+
+float getDpi()
+{
+    UINT xdpi = 96;
+    const auto dc = ::GetDC(nullptr);
+    if (dc)
+    {
+        xdpi = ::GetDeviceCaps(dc, LOGPIXELSX);
+        ::ReleaseDC(nullptr, dc);
+    }
+    return xdpi / 96.f;
 }
 
 void* loadDynamicLib(const char* libName)
