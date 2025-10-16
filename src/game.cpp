@@ -1,5 +1,6 @@
 #include "game.hpp"
 
+#include "entity.hpp"
 #include "imgui.h"
 
 #include "common/math.cpp"
@@ -10,7 +11,6 @@
 #include "gui.cpp"
 #include "entity.cpp"
 #include "input.cpp"
-#include "dummy.cpp"
 
 void setColor(Entity& entity, vec4 color)
 {
@@ -44,11 +44,11 @@ Entity* pushEntity(HeapArray<Entity>& entities)
     return arrayPush(entities, entity);
 }
 
-Entity* pushDrawable(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCmds, MeshType mesh)
+Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, MeshType mesh)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
-    entity.drawCommand = pushDrawCmd(drawCmds, mesh);
+    entity.drawCommand = pushDrawCmd(renderState, mesh);
 
     switch (mesh)
     {
@@ -61,6 +61,19 @@ Entity* pushDrawable(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCm
     }
 
     return arrayPush(entities, entity);
+}
+
+void setLightType(Entity& light, LightType type)
+{
+    ENSURE(hasType(light, EntityType::Light));
+
+    light.lightType = type;
+
+    for (auto& other : getEntities())
+    {
+        if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+            setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
+    }
 }
 
 void setLightDirection(Entity& light, vec3 direction)
@@ -78,19 +91,14 @@ void setLightDirection(Entity& light, vec3 direction)
     }
 }
 
-Entity* pushLight(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCmds, LightType type)
+Entity* pushLight(HeapArray<Entity>& entities, RenderState& renderState, LightType type)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Light | EntityType::Drawable;
-    entity.lightType = type;
-    entity.drawCommand = pushDrawCmd(drawCmds, MeshType::Cube, ShaderType::Unlit);
+    entity.drawCommand = pushDrawCmd(renderState, MeshType::Sphere, ShaderType::Unlit);
     entity.name = "light";
 
-    for (auto& other : entities)
-    {
-        if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
-            setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
-    }
+    setLightType(entity, type);
 
     if (type == LightType::Directional)
     {
@@ -101,7 +109,7 @@ Entity* pushLight(HeapArray<Entity>& entities, HeapArray<DrawCommand>& drawCmds,
     }
 
     setColor(entity, vec4(1, 1, 1, 1));
-    setLocalScale(entity, vec3(0.25f));
+    setLocalScale(entity, vec3(0.1f));
 
     return arrayPush(entities, entity);
 }
@@ -114,10 +122,10 @@ void onResize(Context& ctx)
 void gameInit(Context& ctx)
 {
     logInfo("game init");
-    setInternalPointer(&ctx.input);
-    setInternalPointer(&ctx.entityManager);
+    setInternalPointer(ctx.input);
+    setInternalPointer(ctx.entityManager, ctx.tempMemory);
 
-    renderInit(ctx.platform.window, ctx.render.screenSize.x, ctx.render.screenSize.y);
+    renderInit(ctx.render, ctx.platform.window);
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
     auto camera = defaultEntity();
@@ -132,9 +140,9 @@ void gameInit(Context& ctx)
 
     onResize(ctx);
 
-    ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Grid);
-    ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Sphere);
-    ctx.gameState.cube = pushDrawable(ctx.entityManager.entities, ctx.render.drawCommands, MeshType::Cube);
+    ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Grid);
+    ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Sphere);
+    ctx.gameState.cube = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Cube);
     setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
     setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
     setColor(*ctx.gameState.sphere, vec4(0.2f, 1.f, 0.5f, 1.f));
@@ -147,7 +155,7 @@ void gameInit(Context& ctx)
     ctx.gameState.lightOrigin = pushEntity(ctx.entityManager.entities);
     ctx.gameState.lightOrigin->name = "light origin";
     setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
-    ctx.gameState.light = pushLight(ctx.entityManager.entities, ctx.render.drawCommands, LightType::Point);
+    ctx.gameState.light = pushLight(ctx.entityManager.entities, ctx.render, LightType::Point);
     setParent(*ctx.gameState.light, *ctx.gameState.lightOrigin);
     setLocalPosition(*ctx.gameState.light, vec3(0, 0, 2));
 
@@ -265,28 +273,32 @@ void guiEntityContents(Context& ctx, Entity& entity)
     }
     else
     {
-        // todo world transform
-        // auto pos = entity.position;
-        // if (ImGui::DragFloat3("pos", &pos.x, 0.1f))
-        // {
-        //     setLocalPosition(entity, pos);
-        // }
-        //
-        // auto rot = entity.euler;
-        // if (ImGui::DragFloat3("rot", &rot.x, 0.1f))
-        // {
-        //     setLocalRotation(entity, rot);
-        // }
-        //
-        // if (!hasType(entity, EntityType::Camera))
-        // {
-        //     auto scale = entity.scale;
-        //     if (ImGui::DragFloat3("scale", &scale.x, 0.1f))
-        //     {
-        //         setLocalScale(entity, scale);
-        //     }
-        // }
+        auto pos = entity.worldPosition;
+        if (ImGui::DragFloat3("pos", &pos.x, 0.1f))
+        {
+            setWorldPosition(entity, pos);
+        }
+
+        auto rot = entity.worldEuler;
+        if (ImGui::DragFloat3("rot", &rot.x, 0.1f))
+        {
+            setWorldRotation(entity, rot);
+        }
+
+        if (!hasType(entity, EntityType::Camera))
+        {
+            auto scale = entity.worldScale;
+            if (ImGui::DragFloat3("scale", &scale.x, 0.1f))
+            {
+                setWorldScale(entity, scale);
+            }
+        }
     }
+    if (ImGui::RadioButton("local", entity.guiIsLocal))
+        entity.guiIsLocal = true;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("world", !entity.guiIsLocal))
+        entity.guiIsLocal = false;
 
     // camera
     if (hasType(entity, EntityType::Camera))
@@ -303,11 +315,29 @@ void guiEntityContents(Context& ctx, Entity& entity)
     // light
     if (hasType(entity, EntityType::Light))
     {
-        auto direction = entity.lightDirection;
-        if (ImGui::DragFloat3("direction", &direction.x, 0.1f))
+        static const char* lightTypes[] = {"directional", "point"};
+        if (ImGui::BeginCombo("type", lightTypes[(i32)entity.lightType]))
         {
-            setLightDirection(entity, direction);
+            for (int n = 0; n < ARR_LENGTH(lightTypes); n++)
+            {
+                const auto isSelected = n == (i32)entity.lightType;
+                if (ImGui::Selectable(lightTypes[n], isSelected))
+                    setLightType(entity, (LightType)n);
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
         }
+
+        if (entity.lightType == LightType::Directional)
+        {
+            auto direction = entity.lightDirection;
+            if (ImGui::DragFloat3("direction", &direction.x, 0.1f))
+            {
+                setLightDirection(entity, direction);
+            }
+        }
+
         auto color = entity.lightColor;
         if (ImGui::ColorEdit4("color", &color.x))
         {
@@ -315,13 +345,35 @@ void guiEntityContents(Context& ctx, Entity& entity)
         }
     }
 
-    if (ImGui::RadioButton("local", entity.guiIsLocal))
-        entity.guiIsLocal = true;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("world", !entity.guiIsLocal))
-        entity.guiIsLocal = false;
-
     ImGui::PopID();
+}
+
+void checkReparentSource(Entity& entity)
+{
+    if (ImGui::BeginDragDropSource())
+    {
+        const auto entityPtr = &entity;
+        ImGui::SetDragDropPayload("reparent", &entityPtr, sizeof(void*));
+        ImGui::EndDragDropSource();
+    }
+}
+
+void checkReparentTarget(Entity& entity)
+{
+    if (ImGui::BeginDragDropTarget())
+    {
+        const auto reparentEntityPayload = ImGui::GetDragDropPayload();
+        const auto result = ImGui::AcceptDragDropPayload("reparent");
+        if (result)
+        {
+            if (reparentEntityPayload && reparentEntityPayload->Data)
+            {
+                const auto toReparent = (Entity**)reparentEntityPayload->Data;
+                setParent(**toReparent, entity);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
 }
 
 void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32 hierarchyLevel)
@@ -345,6 +397,10 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     if (hasChildren)
     {
         const auto open = ImGui::TreeNodeEx(entity.name, nodeFlags);
+
+        checkReparentSource(entity);
+        checkReparentTarget(entity);
+
         if (ImGui::IsItemClicked())
         {
             ctx.gui.selectedEntity = &entity;
@@ -371,6 +427,9 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 
         ImGui::TreeNodeEx(entity.name, nodeFlags);
 
+        checkReparentSource(entity);
+        checkReparentTarget(entity);
+
         if (ImGui::IsItemClicked())
         {
             ctx.gui.selectedEntity = &entity;
@@ -383,6 +442,17 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 void onGui(Context& ctx)
 {
     ImGui::Begin("universe");
+
+    const auto dndPayload = ImGui::GetDragDropPayload();
+    if (dndPayload && dndPayload->Data)
+    {
+        const auto entity = ((Entity*)dndPayload->Data);
+        ImGui::Text("dnd entity: %s", entity->name);
+    }
+    else
+    {
+        ImGui::Text("dnd entity: null");
+    }
 
     ImGui::Text("pause: %s", ctx.pause ? "true" : "false");
     ImGui::SetNextItemWidth(GUI_SLIDER_WIDTH);
@@ -397,20 +467,23 @@ void onGui(Context& ctx)
         ImGui::TableHeadersRow();
 
         for (auto& entity : getEntities())
+        {
             guiEntityHierarchy(ctx, entity, flags, 0);
+        }
+
+        if (!ctx.entityManager.camera.parent)
+            guiEntityHierarchy(ctx, ctx.entityManager.camera, flags, 0);
 
         ImGui::EndTable();
     }
 
     if (ctx.gui.selectedEntity)
     {
-        ImGui::Separator();
         ImGui::Text("selected: ");
-        ImGui::SameLine();
         guiEntityContents(ctx, *(Entity*)ctx.gui.selectedEntity);
     }
 
-    guiEntityContents(ctx, ctx.entityManager.camera);
+    ImGui::Separator();
 
     ImGui::End();
 }
@@ -420,8 +493,12 @@ void gameUpdateAndRender(Context& ctx)
     const auto timeScale = ctx.timeScale * (float)!ctx.pause;
     const auto dt = ctx.dt * timeScale;
 
-    if (wasKeyPressed(KeyboardKey::KEY_P))
+    if (wasKeyPressed(KeyboardKey::KEY_SPACE))
         ctx.pause = !ctx.pause;
+    if (wasKeyPressed(KeyboardKey::KEY_Z))
+        ctx.timeScale = std::max(0.f, ctx.timeScale += -1);
+    if (wasKeyPressed(KeyboardKey::KEY_X))
+        ctx.timeScale += 1;
 
     float time = getElapsedTime();
     for (auto& entity : ctx.entityManager.entities)
@@ -438,8 +515,10 @@ void gameUpdateAndRender(Context& ctx)
 
     cameraControllerUpdate(ctx.dt, ctx.input, ctx.gameState.cameraController);
 
-    auto speed = 75.f * dt;
-    addLocalRotation(*ctx.gameState.lightOrigin, vec3(0, speed, 0));
+    const auto speed = 75.f * dt;
+    const auto sine = std::sin(time) * dt;
+    addLocalRotation(*ctx.gameState.cube, vec3(0, speed, 0));
+    addLocalPosition(*ctx.gameState.lightOrigin, vec3(0, sine, 0));
 
     if (ctx.render.needsToResize)
     {

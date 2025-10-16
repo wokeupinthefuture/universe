@@ -15,33 +15,36 @@ enum class RasterizerState
 struct DrawCommand
 {
     RasterizerState rasterizerState;
-    MeshType mesh;
+    Mesh* mesh;
     ShaderType shader;
     ShaderVariable variables[MAX_SHADER_VARIABLES];
 };
 
 static constexpr auto MAX_DRAW_COMMANDS = 10;
+static constexpr auto MAX_LOADED_MESHES = 10;
 
 struct RenderState
 {
     bool needsToResize;
     vec2 screenSize;
     HeapArray<DrawCommand> drawCommands;
+    Mesh generatedMeshes[(i32)MeshType::Max];
+    Mesh loadedMeshes[MAX_LOADED_MESHES];
 };
 
-void renderInit(void* window, float windowWidth, float windowHeight);
+void renderInit(RenderState& state, void* window);
 void renderDeinit();
 
 void createShaderVariables(DrawCommand& command);
 
-inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType mesh, ShaderType shader = ShaderType::Basic)
+inline DrawCommand* pushDrawCmd(RenderState& state, MeshType meshType, ShaderType shader = ShaderType::Basic)
 {
     DrawCommand cmd = {};
-    cmd.mesh = mesh;
+    cmd.mesh = &state.generatedMeshes[(i32)meshType];
     cmd.rasterizerState = RasterizerState::Default;
     cmd.shader = shader;
 
-    if (mesh == MeshType::Grid)
+    if (meshType == MeshType::Grid)
     {
         cmd.rasterizerState = RasterizerState::Wireframe;
         cmd.shader = ShaderType::Unlit;
@@ -49,7 +52,7 @@ inline DrawCommand* pushDrawCmd(HeapArray<DrawCommand>& drawCommands, MeshType m
 
     createShaderVariables(cmd);
 
-    return arrayPush(drawCommands, cmd);
+    return arrayPush(state.drawCommands, cmd);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color);

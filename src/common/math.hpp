@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cmath>
-
 // dx11 defines
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -43,10 +41,15 @@ vec3 matrixExtractScale(mat4 mat);
 void matrixExtractRotation(mat4 mat, vec3 scale, quat& outRot, vec3& outEuler);
 mat4 transformToMatrix(vec3 translation, quat rotation, vec3 scale);
 
+vec3 worldToLocal(vec3 worldPoint, mat4 parentMatrix);
+quat worldToLocal(quat worldRot, quat parentWorldRot);
+
 template <typename T>
 int signum(T val)
 {
     return (T(0) < val) - (val < T(0));
 }
 
-vec3 clampedScale(vec3 scale);
+float remap(float source, float sourceFrom, float sourceTo, float targetFrom, float targetTo);
+
+const char* vec3ToString(struct Arena& arena, vec3 v);

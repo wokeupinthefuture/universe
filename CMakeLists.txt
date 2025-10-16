@@ -27,6 +27,7 @@ target_include_directories(${PLATFORM_EXECUTABLE} PRIVATE "${CMAKE_SOURCE_DIR}/s
 # game dll
 set(GAME_SOURCES 
     "${CMAKE_SOURCE_DIR}/src/game.cpp"
+    "${CMAKE_SOURCE_DIR}/src/dummy.cpp"
 )
 message(STATUS "GAME DLL SOURCE FILES:")
 foreach (element ${GAME_SOURCES})

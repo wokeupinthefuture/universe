@@ -7,11 +7,14 @@
     "resizable window/viewport",
     "shared constant buffer",
     "integrate imgui",
-    "point light"
+    "point light",
+    "mesh structure",
+    "reparenting, world transform setters"
   ],
-  "current": "sphere geometry normals",
+  "current": "unparenting",
   "todo": [
-    "reparenting, world transform setters",
+    "arrow mesh (generated/loaded?)",
+    "sphere geometry normals",
     "gravity physics",
     "fancy shaders for a planet/star shape"
   ]

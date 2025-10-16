@@ -1,9 +1,18 @@
 #include "geometry.hpp"
+#include "common/utils.hpp"
 #include "platform.hpp"
 
-void generateSphere(
+static Mesh generateSphere(
     float radius, u32 stacks, u32 slices, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
 {
+    Mesh mesh;
+
+    mesh.vertices = outVertices;
+    mesh.verticesCount = verticesCount;
+    mesh.indices = outIndices;
+    mesh.indicesCount = indicesCount;
+    mesh.isIndexed = true;
+
     size_t vertexCount = 0;
     // Generate vertices
     for (unsigned int i = 0; i <= stacks; ++i)
@@ -47,11 +56,21 @@ void generateSphere(
             outIndices[indexCount++] = first + 1;
         }
     }
+
+    return mesh;
 }
 
-void generateGrid(
+static Mesh generateGrid(
     i32 gridX, i32 gridY, float spacing, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
 {
+    Mesh mesh;
+
+    mesh.vertices = outVertices;
+    mesh.verticesCount = verticesCount;
+    mesh.indices = outIndices;
+    mesh.indicesCount = indicesCount;
+    mesh.isIndexed = true;
+
     i32 vertexCount = 0;
     for (int z = 0; z <= gridY; z++)
     {
@@ -76,4 +95,159 @@ void generateGrid(
         outIndices[indexCount++] = lineBegin;
         outIndices[indexCount++] = lineEnd;
     }
+
+    return mesh;
+}
+
+Mesh generateMesh(MeshType type)
+{
+    Mesh mesh;
+
+    switch (type)
+    {
+        case MeshType::Triangle:
+        {
+            static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.0f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}}};
+            static u32 INDICES[] = {0, 1, 2};
+
+            mesh.vertices = VERTICES;
+            mesh.verticesCount = ARR_LENGTH(VERTICES);
+            mesh.indices = INDICES;
+            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.isIndexed = true;
+
+            break;
+        }
+        case MeshType::Quad:
+        {
+            static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}}};
+            static u32 INDICES[] = {0, 1, 2, 2, 3, 0};
+
+            mesh.vertices = VERTICES;
+            mesh.verticesCount = ARR_LENGTH(VERTICES);
+            mesh.indices = INDICES;
+            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.isIndexed = true;
+
+            break;
+        }
+        case MeshType::Cube:
+        {
+            static Vertex VERTICES[] = {// Front face (z = 0.5)
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
+                // Back face (z = -0.5)
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                // Left face (x = -0.5)
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
+                // Right face (x = 0.5)
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
+                // Top face (y = 0.5)
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
+                // Bottom face (y = -0.5)
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}}};
+
+            // Indices for 6 faces (12 triangles)
+            static u32 INDICES[] = {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,  // Front
+                4,
+                5,
+                6,
+                4,
+                6,
+                7,  // Back
+                8,
+                9,
+                10,
+                8,
+                10,
+                11,  // Left
+                12,
+                13,
+                14,
+                12,
+                14,
+                15,  // Right
+                16,
+                17,
+                18,
+                16,
+                18,
+                19,  // Top
+                20,
+                21,
+                22,
+                20,
+                22,
+                23  // Bottom
+            };
+
+            mesh.vertices = VERTICES;
+            mesh.verticesCount = ARR_LENGTH(VERTICES);
+            mesh.indices = INDICES;
+            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.isIndexed = true;
+
+            break;
+        }
+        case MeshType::Sphere:
+        {
+            static constexpr auto SPHERE_STACKS = 16;
+            static constexpr auto SPHERE_SLICES = 16;
+            static constexpr auto SPHERE_RADIUS = 1.f;
+
+            static Vertex VERTICES[(SPHERE_STACKS + 1) * (SPHERE_SLICES + 1)] = {};
+            static u32 INDICES[(SPHERE_STACKS + 1) * (SPHERE_SLICES + 1) * 6] = {};
+
+            mesh = generateSphere(
+                SPHERE_RADIUS, SPHERE_STACKS, SPHERE_SLICES, VERTICES, ARR_LENGTH(VERTICES), INDICES, ARR_LENGTH(INDICES));
+
+            break;
+        }
+        case MeshType::Grid:
+        {
+            static constexpr auto GRID_X = 100;
+            static constexpr auto GRID_Y = 100;
+            static constexpr auto GRID_SPACING = 5.f;
+
+            static Vertex VERTICES[GRID_X * GRID_Y] = {};
+            static u32 INDICES[GRID_X * GRID_Y * 4] = {};
+
+            mesh = generateGrid(GRID_X, GRID_Y, GRID_SPACING, VERTICES, ARR_LENGTH(VERTICES), INDICES, ARR_LENGTH(INDICES));
+
+            break;
+        }
+        default: LOGIC_ERROR();
+    }
+
+    mesh.type = type;
+
+    return mesh;
 }

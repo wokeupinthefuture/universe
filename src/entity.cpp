@@ -3,9 +3,11 @@
 #include "renderer.hpp"
 
 static EntityManager* manager;
-void setInternalPointer(EntityManager* _manager)
+static Arena* tempMemory;
+void setInternalPointer(EntityManager& _manager, Arena& _tempMemory)
 {
-    manager = _manager;
+    manager = &_manager;
+    tempMemory = &_tempMemory;
 }
 
 HeapArray<Entity>& getEntities()
@@ -14,7 +16,7 @@ HeapArray<Entity>& getEntities()
     return manager->entities;
 }
 
-static mat4 getWorldMatrix(Entity& entity)
+static mat4 calculateWorldTransform(Entity& entity)
 {
     if (!entity.isWorldMatrixDirty && !entity.parent)
         return entity.worldMatrixCache;
@@ -23,7 +25,7 @@ static mat4 getWorldMatrix(Entity& entity)
 
     if (entity.parent)
     {
-        auto parentWorld = getWorldMatrix(*entity.parent);
+        auto parentWorld = calculateWorldTransform(*entity.parent);
         entity.worldMatrixCache = parentWorld * localMatrix;
     }
     else
@@ -32,12 +34,18 @@ static mat4 getWorldMatrix(Entity& entity)
     }
 
     entity.isWorldMatrixDirty = false;
+
+    entity.worldPosition = matrixExtractPosition(entity.worldMatrixCache);
+    entity.worldScale = matrixExtractScale(entity.worldMatrixCache);
+    ENSURE(entity.worldScale.x > 0.f && entity.worldScale.y > 0.f && entity.worldScale.z > 0.f);
+    matrixExtractRotation(entity.worldMatrixCache, entity.worldScale, entity.worldRotation, entity.worldEuler);
+
     return entity.worldMatrixCache;
 }
 
 static void updateShaderMVP(Entity& entity, Entity& camera)
 {
-    const auto model = getWorldMatrix(entity);  // aka world matrix
+    const auto model = entity.worldMatrixCache;
     const auto view = camera.view;
     const auto projection = camera.perspective;
     ENSURE(entity.drawCommand != nullptr);
@@ -48,10 +56,10 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
 
 static void calculateCameraView(Entity& camera)
 {
-    const auto rotation = glm::toMat4(camera.rotation);
-    const auto target = camera.position + getForwardVector(rotation);
+    const auto rotation = glm::toMat4(camera.worldRotation);
+    const auto target = camera.worldPosition + getForwardVector(rotation);
     const auto up = getUpVector(rotation);
-    camera.view = lookAtLH(camera.position, target, up);
+    camera.view = lookAtLH(camera.worldPosition, target, up);
 }
 
 void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
@@ -80,6 +88,8 @@ void calculateCameraProjection(Entity& camera, vec2 screenSize, HeapArray<Entity
 
 void updateTransform(Entity& entity)
 {
+    calculateWorldTransform(entity);
+
     ENSURE(manager != nullptr);
     if (hasType(entity, EntityType::Camera))
     {
@@ -89,11 +99,6 @@ void updateTransform(Entity& entity)
     {
         updateShaderMVP(entity, manager->camera);
     }
-
-    const auto worldMatrix = entity.worldMatrixCache;
-    entity.worldPosition = matrixExtractPosition(worldMatrix);
-    entity.worldScale = matrixExtractScale(worldMatrix);
-    matrixExtractRotation(worldMatrix, entity.worldScale, entity.worldRotation, entity.worldEuler);
 
     if (hasType(entity, EntityType::Light))
     {
@@ -121,11 +126,6 @@ bool hasType(Entity const& entity, EntityType type)
     return bool(entity.type & type);
 }
 
-void addLocalPosition(Entity& entity, vec3 pos)
-{
-    setLocalPosition(entity, entity.position + pos);
-}
-
 void setLocalPosition(Entity& entity, vec3 pos)
 {
     entity.position = pos;
@@ -133,8 +133,17 @@ void setLocalPosition(Entity& entity, vec3 pos)
     updateTransform(entity);
 }
 
+void addLocalPosition(Entity& entity, vec3 pos)
+{
+    setLocalPosition(entity, entity.position + pos);
+}
+
 void setLocalScale(Entity& entity, vec3 scale)
 {
+    scale.x = std::max(scale.x, 0.00001f);
+    scale.y = std::max(scale.y, 0.00001f);
+    scale.z = std::max(scale.z, 0.00001f);
+
     entity.scale = scale;
     entity.isWorldMatrixDirty = true;
     updateTransform(entity);
@@ -142,6 +151,19 @@ void setLocalScale(Entity& entity, vec3 scale)
 
 void setLocalRotation(Entity& entity, vec3 rot)
 {
+    if (rot.x > 360.f)
+        rot.x -= 360.f;
+    if (rot.y > 360.f)
+        rot.y -= 360.f;
+    if (rot.z > 360.f)
+        rot.z -= 360.f;
+    if (rot.x < -360.f)
+        rot.x += 360.f;
+    if (rot.y < -360.f)
+        rot.y += 360.f;
+    if (rot.z < -360.f)
+        rot.z += 360.f;
+
     entity.rotation = eulerToQuat(rot);
     entity.euler = rot;
     entity.isWorldMatrixDirty = true;
@@ -153,8 +175,89 @@ void addLocalRotation(Entity& entity, vec3 euler)
     setLocalRotation(entity, entity.euler + euler);
 }
 
+void setWorldPosition(Entity& entity, vec3 pos)
+{
+    if (!entity.parent)
+    {
+        entity.position = pos;
+    }
+    else
+    {
+        entity.position = worldToLocal(pos, entity.parent->worldMatrixCache);
+    }
+
+    entity.isWorldMatrixDirty = true;
+    updateTransform(entity);
+}
+
+void addWorldPosition(Entity& entity, vec3 pos)
+{
+    setWorldPosition(entity, entity.worldPosition + pos);
+}
+
+void setWorldRotation(Entity& entity, vec3 rot)
+{
+    if (rot.x > 360.f)
+        rot.x -= 360.f;
+    if (rot.y > 360.f)
+        rot.y -= 360.f;
+    if (rot.z > 360.f)
+        rot.z -= 360.f;
+    if (rot.x < -360.f)
+        rot.x += 360.f;
+    if (rot.y < -360.f)
+        rot.y += 360.f;
+    if (rot.z < -360.f)
+        rot.z += 360.f;
+
+    if (!entity.parent)
+    {
+        entity.rotation = eulerToQuat(rot);
+        entity.euler = rot;
+    }
+    else
+    {
+        const auto worldRotation = eulerToQuat(rot);
+        entity.rotation = worldToLocal(worldRotation, entity.parent->worldMatrixCache);
+        entity.euler = quatToEuler(entity.rotation);
+    }
+
+    entity.isWorldMatrixDirty = true;
+    updateTransform(entity);
+}
+
+void addWorldRotation(Entity& entity, vec3 euler)
+{
+    setWorldRotation(entity, entity.worldEuler + euler);
+}
+
+void setWorldScale(Entity& entity, vec3 scale)
+{
+    scale.x = std::max(scale.x, 0.00001f);
+    scale.y = std::max(scale.y, 0.00001f);
+    scale.z = std::max(scale.z, 0.00001f);
+
+    if (!entity.parent)
+    {
+        entity.scale = scale;
+    }
+    else
+    {
+        entity.scale = scale / entity.parent->worldScale;
+    }
+
+    entity.isWorldMatrixDirty = true;
+    updateTransform(entity);
+}
+
 void setParent(Entity& entity, Entity& parent)
 {
+    if (&entity == &parent)
+        return;
+
+    if (entity.parent && &parent == entity.parent)
+        return;
+
     const auto childSlot = findIndex(parent.children, MAX_ENTITY_CHILDREN, [](auto& child) { return child == nullptr; });
     if (childSlot == -1)
         return;
@@ -169,13 +272,30 @@ vec3 getForwardVector(Entity& entity)
 {
     return getForwardVector(toMat4(entity.rotation));
 }
+
 vec3 getRightVector(Entity& entity)
 {
     return getRightVector(toMat4(entity.rotation));
 }
+
 vec3 getUpVector(Entity& entity)
 {
     return getUpVector(toMat4(entity.rotation));
+}
+
+vec3 getWorldForwardVector(Entity& entity)
+{
+    return getForwardVector(toMat4(entity.worldRotation));
+}
+
+vec3 getWorldRightVector(Entity& entity)
+{
+    return getRightVector(toMat4(entity.worldRotation));
+}
+
+vec3 getWorldUpVector(Entity& entity)
+{
+    return getUpVector(toMat4(entity.worldRotation));
 }
 
 constexpr EntityType operator|(EntityType lhs, EntityType rhs)

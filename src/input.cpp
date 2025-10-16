@@ -3,9 +3,9 @@
 
 static InputState* state;
 
-void setInternalPointer(InputState* _state)
+void setInternalPointer(InputState& _state)
 {
-    state = _state;
+    state = &_state;
 }
 
 bool isKeyPressed(KeyboardKey key)

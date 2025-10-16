@@ -1,4 +1,7 @@
 #include "math.hpp"
+#include "memory.hpp"
+
+#define NOMINMAX
 
 vec3 getForwardVector(mat4 rotation)
 {
@@ -89,9 +92,9 @@ vec3 matrixExtractPosition(mat4 mat)
 vec3 matrixExtractScale(mat4 mat)
 {
     vec3 scale{};
-    scale.x = std::sqrt(mat[1][0] * mat[0][0] + mat[1][0] * mat[1][0] + mat[2][0] * mat[2][0]) * signum(mat[0][0]);
-    scale.y = std::sqrt(mat[0][1] * mat[0][1] + mat[1][1] * mat[1][1] + mat[2][1] * mat[2][1]) * signum(mat[1][1]);
-    scale.z = std::sqrt(mat[0][2] * mat[0][2] + mat[1][2] * mat[1][2] + mat[2][2] * mat[2][2]) * signum(mat[2][2]);
+    scale.x = glm::length(mat[0]);
+    scale.y = glm::length(mat[1]);
+    scale.z = glm::length(mat[2]);
     return scale;
 }
 
@@ -106,30 +109,41 @@ mat4 transformToMatrix(vec3 position, quat rotation, vec3 _scale)
 void matrixExtractRotation(mat4 mat, vec3 scale, quat& outRot, vec3& outEuler)
 {
     auto rotationMatrix = mat;
+    // removing translation (glm stores matrices in column-major order!)
     rotationMatrix[3][0] = 0;
     rotationMatrix[3][1] = 0;
     rotationMatrix[3][2] = 0;
-    rotationMatrix[0] /= vec4{scale.x, scale.y, scale.z, 1.0};
-    rotationMatrix[1] /= vec4{scale.x, scale.y, scale.z, 1.0};
-    rotationMatrix[2] /= vec4{scale.x, scale.y, scale.z, 1.0};
+    vec3 absScale = glm::abs(scale);
+    const float epsilon = 0.0001f;
+    // removing scale which is in 3x3 cells
+    if (absScale.x > epsilon)
+        rotationMatrix[0] /= vec4{scale, 1.f};
+    if (absScale.y > epsilon)
+        rotationMatrix[1] /= vec4{scale, 1.f};
+    if (absScale.z > epsilon)
+        rotationMatrix[2] /= vec4{scale, 1.f};
     outRot = toQuat(rotationMatrix);
     outEuler = quatToEuler(outRot);
 }
 
-vec3 clampedScale(vec3 scale)
+vec3 worldToLocal(vec3 worldPoint, mat4 parentMatrix)
 {
-    if (scale.x == 0)
-    {
-        scale.x = 0.00001f;
-    }
-    if (scale.y == 0)
-    {
-        scale.y = 0.00001f;
-    }
-    if (scale.z == 0)
-    {
-        scale.z = 0.00001f;
-    }
+    return glm::inverse(parentMatrix) * vec4(worldPoint, 1.f);
+}
 
-    return scale;
+quat worldToLocal(quat worldRot, quat parentWorldRot)
+{
+    return glm::inverse(parentWorldRot) * worldRot;
+}
+
+float remap(float source, float sourceFrom, float sourceTo, float targetFrom, float targetTo)
+{
+    return targetFrom + (source - sourceFrom) * (targetTo - targetFrom) / (sourceTo - sourceFrom);
+}
+
+const char* vec3ToString(Arena& arena, vec3 v)
+{
+    auto string = (char*)arenaAlloc(arena, 256 * sizeof(char), sizeof(char*));
+    sprintf(string, "%f, %f, %f", v.x, v.y, v.z);
+    return string;
 }

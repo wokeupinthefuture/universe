@@ -67,7 +67,7 @@ struct EntityManager
     HeapArray<Entity> entities;
 };
 
-void setInternalPointer(EntityManager& manager);
+void setInternalPointer(EntityManager& manager, Arena& tempMemory);
 
 HeapArray<Entity>& getEntities();
 
@@ -79,9 +79,18 @@ void setLocalRotation(Entity& entity, vec3 euler);
 void addLocalRotation(Entity& entity, vec3 euler);
 void setLocalScale(Entity& entity, vec3 scale);
 
+void setWorldPosition(Entity& entity, vec3 pos);
+void addWorldPosition(Entity& entity, vec3 pos);
+void setWorldRotation(Entity& entity, vec3 euler);
+void addLocalRotation(Entity& entity, vec3 euler);
+void setWorldScale(Entity& entity, vec3 scale);
+
 vec3 getRightVector(Entity& entity);
 vec3 getUpVector(Entity& entity);
 vec3 getForwardVector(Entity& entity);
+vec3 getWorldRightVector(Entity& entity);
+vec3 getWorldUpVector(Entity& entity);
+vec3 getWorldForwardVector(Entity& entity);
 
 bool hasType(Entity const& entity, EntityType type);
 

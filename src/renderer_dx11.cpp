@@ -117,7 +117,7 @@ static Shader createShader(const wchar_t* path)
     return shader;
 }
 
-static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, int vertexCount)
+static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, size_t vertexCount)
 {
     ID3D11Buffer* buffer;
 
@@ -137,7 +137,7 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, int vertexCount)
     return buffer;
 }
 
-static ID3D11Buffer* createIndexBuffer(u32 const* indices, int indexCount)
+static ID3D11Buffer* createIndexBuffer(u32 const* indices, size_t indexCount)
 {
     ID3D11Buffer* buffer;
 
@@ -203,8 +203,14 @@ static void createScreenRenderTarget(vec2 size)
     deviceContext->RSSetViewports(1, &vp);
 }
 
-void renderInit(void* window, float windowWidth, float windowHeight)
+void renderInit(RenderState& state, void* window)
 {
+    const auto& triangle = state.generatedMeshes[(i32)MeshType::Triangle] = generateMesh(MeshType::Triangle);
+    const auto& quad = state.generatedMeshes[(i32)MeshType::Quad] = generateMesh(MeshType::Quad);
+    const auto& cube = state.generatedMeshes[(i32)MeshType::Cube] = generateMesh(MeshType::Cube);
+    const auto& sphere = state.generatedMeshes[(i32)MeshType::Sphere] = generateMesh(MeshType::Sphere);
+    const auto& grid = state.generatedMeshes[(i32)MeshType::Grid] = generateMesh(MeshType::Grid);
+
     DXGI_SWAP_CHAIN_DESC swapChainDesc{};
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     swapChainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
@@ -229,30 +235,22 @@ void renderInit(void* window, float windowWidth, float windowHeight)
         nullptr,
         &deviceContext));
 
-    createScreenRenderTarget({windowWidth, windowHeight});
+    createScreenRenderTarget(state.screenSize);
 
-    vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(TRIANGLE_VERTICES, ARR_LENGTH(TRIANGLE_VERTICES));
-    indexBuffers[(i32)MeshType::Triangle] = createIndexBuffer(TRIANGLE_INDICES, ARR_LENGTH(TRIANGLE_INDICES));
+    vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(triangle.vertices, triangle.verticesCount);
+    indexBuffers[(i32)MeshType::Triangle] = createIndexBuffer(triangle.indices, triangle.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(QUAD_VERTICES, ARR_LENGTH(QUAD_VERTICES));
-    indexBuffers[(i32)MeshType::Quad] = createIndexBuffer(QUAD_INDICES, ARR_LENGTH(QUAD_INDICES));
+    vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(quad.vertices, quad.verticesCount);
+    indexBuffers[(i32)MeshType::Quad] = createIndexBuffer(quad.indices, quad.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Cube] = createVertexBuffer(CUBE_VERTICES, ARR_LENGTH(CUBE_VERTICES));
-    indexBuffers[(i32)MeshType::Cube] = createIndexBuffer(CUBE_INDICES, ARR_LENGTH(CUBE_INDICES));
+    vertexBuffers[(i32)MeshType::Cube] = createVertexBuffer(cube.vertices, cube.verticesCount);
+    indexBuffers[(i32)MeshType::Cube] = createIndexBuffer(cube.indices, cube.indicesCount);
 
-    generateSphere(SPHERE_RADIUS,
-        SPHERE_STACKS,
-        SPHERE_SLICES,
-        SPHERE_VERTICES,
-        ARR_LENGTH(SPHERE_VERTICES),
-        SPHERE_INDICES,
-        ARR_LENGTH(SPHERE_INDICES));
-    vertexBuffers[(i32)MeshType::Sphere] = createVertexBuffer(SPHERE_VERTICES, ARR_LENGTH(SPHERE_VERTICES));
-    indexBuffers[(i32)MeshType::Sphere] = createIndexBuffer(SPHERE_INDICES, ARR_LENGTH(SPHERE_INDICES));
+    vertexBuffers[(i32)MeshType::Sphere] = createVertexBuffer(sphere.vertices, sphere.verticesCount);
+    indexBuffers[(i32)MeshType::Sphere] = createIndexBuffer(sphere.indices, sphere.indicesCount);
 
-    generateGrid(GRID_X, GRID_Y, GRID_SPACING, GRID_VERTICES, ARR_LENGTH(GRID_VERTICES), GRID_INDICES, ARR_LENGTH(GRID_INDICES));
-    vertexBuffers[(i32)MeshType::Grid] = createVertexBuffer(GRID_VERTICES, ARR_LENGTH(GRID_VERTICES));
-    indexBuffers[(i32)MeshType::Grid] = createIndexBuffer(GRID_INDICES, ARR_LENGTH(GRID_INDICES));
+    vertexBuffers[(i32)MeshType::Grid] = createVertexBuffer(grid.vertices, grid.verticesCount);
+    indexBuffers[(i32)MeshType::Grid] = createIndexBuffer(grid.indices, grid.indicesCount);
 
     u32* strides = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
     u32* offsets = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
@@ -372,17 +370,10 @@ void renderDraw(DrawCommand const& command)
     deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState].Get());
 
     u32 stride = sizeof(Vertex), offset = 0;
-    deviceContext->IASetVertexBuffers(0, 1, vertexBuffers[(i32)command.mesh].GetAddressOf(), &stride, &offset);
-    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh].Get(), DXGI_FORMAT_R32_UINT, 0);
-    switch (command.mesh)
-    {
-        case MeshType::Triangle: deviceContext->DrawIndexed(ARR_LENGTH(TRIANGLE_INDICES), 0, 0); break;
-        case MeshType::Quad: deviceContext->DrawIndexed(ARR_LENGTH(QUAD_INDICES), 0, 0); break;
-        case MeshType::Cube: deviceContext->DrawIndexed(ARR_LENGTH(CUBE_INDICES), 0, 0); break;
-        case MeshType::Sphere: deviceContext->DrawIndexed(ARR_LENGTH(SPHERE_INDICES), 0, 0); break;
-        case MeshType::Grid: deviceContext->DrawIndexed(ARR_LENGTH(GRID_INDICES), 0, 0); break;
-        default: LOGIC_ERROR();
-    }
+    deviceContext->IASetVertexBuffers(0, 1, vertexBuffers[(i32)command.mesh->type].GetAddressOf(), &stride, &offset);
+    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh->type].Get(), DXGI_FORMAT_R32_UINT, 0);
+    if (command.mesh->isIndexed)
+        deviceContext->DrawIndexed(command.mesh->indicesCount, 0, 0);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color)

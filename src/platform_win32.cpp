@@ -12,6 +12,9 @@
 #include <Windows.h>
 #include <windowsx.h>
 
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+
 namespace Platform
 {
 
@@ -342,6 +345,9 @@ Window openWindow(int width, int height, const char* name)
 
     const auto hwnd = CreateWindowEx(
         0, name, name, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, hInst, nullptr);
+
+    BOOL USE_DARK_MODE = true;
+    BOOL SET_IMMERSIVE_DARK_MODE_SUCCESS = SUCCEEDED(DwmSetWindowAttribute(hwnd, 20, &USE_DARK_MODE, sizeof(USE_DARK_MODE)));
 
     ShowWindow(hwnd, SW_SHOW);
 
