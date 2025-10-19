@@ -32,17 +32,30 @@ struct RenderState
     Mesh loadedMeshes[MAX_LOADED_MESHES];
 };
 
+void renderInitGeometry(RenderState& state, const Asset* assets, Arena& permanentMemory, Arena& tempMemory);
 void renderInit(RenderState& state, void* window);
 void renderDeinit();
 
 void createShaderVariables(DrawCommand& command);
 
-inline DrawCommand* pushDrawCmd(RenderState& state, MeshType meshType, ShaderType shader = ShaderType::Basic)
+inline DrawCommand* pushDrawCmdEx(
+    RenderState& state, MeshType meshType, AssetID customMeshID = AssetID::Max, ShaderType shader = ShaderType::Basic)
 {
     DrawCommand cmd = {};
-    cmd.mesh = &state.generatedMeshes[(i32)meshType];
+
     cmd.rasterizerState = RasterizerState::Default;
     cmd.shader = shader;
+
+    if (meshType == MeshType::Custom)
+    {
+        ENSURE(customMeshID != AssetID::Max);
+        cmd.mesh = &state.loadedMeshes[(i32)customMeshID];
+        cmd.shader = ShaderType::Unlit;
+    }
+    else
+    {
+        cmd.mesh = &state.generatedMeshes[(i32)meshType];
+    }
 
     if (meshType == MeshType::Grid)
     {
@@ -53,6 +66,11 @@ inline DrawCommand* pushDrawCmd(RenderState& state, MeshType meshType, ShaderTyp
     createShaderVariables(cmd);
 
     return arrayPush(state.drawCommands, cmd);
+}
+
+inline DrawCommand* pushDrawCmd(RenderState& state, MeshType meshType, ShaderType shader = ShaderType::Basic)
+{
+    return pushDrawCmdEx(state, meshType, AssetID::Max, shader);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color);

@@ -9,11 +9,13 @@
     "integrate imgui",
     "point light",
     "mesh structure",
-    "reparenting, world transform setters"
+    "reparenting, world transform setters",
+    "imgui unparenting",
+    "custom geometry loader",
+    "depth buffer"
   ],
-  "current": "unparenting",
+  "current":  "arrow mesh for visualizing vectors", 
   "todo": [
-    "arrow mesh (generated/loaded?)",
     "sphere geometry normals",
     "gravity physics",
     "fancy shaders for a planet/star shape"

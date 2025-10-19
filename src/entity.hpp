@@ -73,6 +73,8 @@ HeapArray<Entity>& getEntities();
 
 void updateTransform(Entity& entity);
 
+void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform = false);
+
 void setLocalPosition(Entity& entity, vec3 pos);
 void addLocalPosition(Entity& entity, vec3 pos);
 void setLocalRotation(Entity& entity, vec3 euler);

@@ -250,20 +250,50 @@ void setWorldScale(Entity& entity, vec3 scale)
     updateTransform(entity);
 }
 
-void setParent(Entity& entity, Entity& parent)
+static void findEraseChild(Entity& parent, Entity& child)
 {
-    if (&entity == &parent)
+    const auto oldParentChildSlot =
+        findIndex(parent.children, MAX_ENTITY_CHILDREN, [&](auto& otherChild) { return otherChild == &child; });
+    ENSURE(oldParentChildSlot != -1);
+    parent.children[oldParentChildSlot] = nullptr;
+}
+
+void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
+{
+    if (!newParent)
+    {
+        if (entity.parent)
+            findEraseChild(*entity.parent, entity);
+        entity.parent = nullptr;
+
+        updateTransform(entity);
+
+        return;
+    }
+
+    if (&entity == newParent)
         return;
 
-    if (entity.parent && &parent == entity.parent)
+    if (entity.parent && newParent == entity.parent)
         return;
 
-    const auto childSlot = findIndex(parent.children, MAX_ENTITY_CHILDREN, [](auto& child) { return child == nullptr; });
-    if (childSlot == -1)
+    const auto newChildSlot = findIndex(newParent->children, MAX_ENTITY_CHILDREN, [](auto& child) { return child == nullptr; });
+    if (newChildSlot == -1)
         return;
 
-    entity.parent = &parent;
-    parent.children[childSlot] = &entity;
+    if (entity.parent)
+        findEraseChild(*entity.parent, entity);
+
+    entity.parent = &*newParent;
+    newParent->children[newChildSlot] = &entity;
+
+    if (!keepWorldTransform)
+    {
+        entity.position = {};
+        entity.rotation = {};
+        entity.euler = {};
+        entity.scale = vec3(1.f, 1.f, 1.f);
+    }
 
     updateTransform(entity);
 }

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>Stream To-Do Flat</title>
+<style>
+  /* Keep colors consistent with ImGui-styled todo.html */
+  :root{
+    --win-bg: rgba(37,37,38,0.85);
+    --border: #5a5d63;
+    --panel-bg: #0f0f10;
+    --text: #ffffff;
+    --text-muted: #808080; /* TextDisabled */
+    --text-normal: #e6e6e6;
+    --hover: rgba(66,150,250,0.13);
+    --active: rgba(66,150,250,0.35);
+  }
+  html, body { margin:0; padding:0; background:transparent; height:100vh; }
+  body { font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace; }
+
+  /* Bottom-aligned thin bar */
+  .bar-wrap {
+    position: fixed; right: 0; bottom: 0;
+    background: var(--win-bg);
+    border: 1px solid var(--border);
+    width: 100%; /* let OBS crop or set custom width; it's bottom-aligned */
+    max-height: 34px; /* very thin */
+    box-sizing: border-box;
+  }
+  .bar {
+    display:flex; align-items:center; gap:0;
+    height: 32px; /* target thin height */
+    line-height: 32px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .cell {
+    display:flex; align-items:center; gap:8px;
+    padding: 0 10px;
+    height: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: transparent;
+    border-right: 1px solid #2e3035; /* subtle separator (ImGui child border tone) */
+    min-width: 180px; /* readable slice */
+    box-sizing: border-box;
+  }
+  .cell:last-child { border-right: none; }
+
+  .label { color:#c7c7c7; opacity:.85; font-weight:700; font-size:12px; }
+  .val { color: var(--text-normal); }
+
+  /* states consistent with main widget */
+  .completed .val { color: var(--text-muted); text-decoration: line-through; }
+  .current  { background: var(--active); }
+  .next .val { color: var(--text-normal); }
+
+  /* optional hover (useful in browser) */
+  .cell:hover { background: var(--hover); }
+</style>
+
+<div class="bar-wrap">
+  <div class="bar">
+    <div class="cell completed"><span class="label">prev</span><span id="prev" class="val">—</span></div>
+    <div class="cell current"><span class="label">current</span><span id="curr" class="val">—</span></div>
+    <div class="cell next"><span class="label">next</span><span id="next" class="val">—</span></div>
+  </div>
+</div>
+
+<script>
+  const elPrev = document.getElementById('prev');
+  const elCurr = document.getElementById('curr');
+  const elNext = document.getElementById('next');
+
+  function apply(data){
+    const completed = Array.isArray(data.completed) ? data.completed : [];
+    const current = data.current || '';
+    const todo = Array.isArray(data.todo) ? data.todo : [];
+
+    const prev = completed.length ? completed[completed.length - 1] : '';
+    const next = todo.length ? todo[0] : '';
+
+    elPrev.textContent = prev || '—';
+    elCurr.textContent = current || '—';
+    elNext.textContent = next || '—';
+  }
+
+  async function fetchAndRender(){
+    try {
+      const res = await fetch('todo.json?' + Date.now());
+      const data = await res.json();
+      apply(data);
+    } catch(e){
+      // leave placeholders on errors
+    }
+  }
+  fetchAndRender();
+  setInterval(fetchAndRender, 3000);
+</script>

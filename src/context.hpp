@@ -30,6 +30,7 @@ struct GameState
     CameraController cameraController;
     Entity* light;
     Entity* lightOrigin;
+    Entity* arrow;
 };
 
 struct Context
@@ -41,7 +42,8 @@ struct Context
     bool wantsToQuit;
     bool wantsToReload;
 
-    Arena permanentMemory;
+    Arena platformMemory;
+    Arena gameMemory;
     Arena tempMemory;
 
     PlatformToGameBuffer platform;
@@ -56,12 +58,14 @@ inline void contextInit(Context& context, size_t memorySize, size_t tempMemorySi
 {
     context.timeScale = 1.f;
     context.dt = 0.016f;
+    context.render.needsToResize = true;
 
-    arenaInit(context.permanentMemory, memorySize);
+    arenaInit(context.platformMemory, memorySize);
+    arenaInit(context.gameMemory, memorySize);
     arenaInit(context.tempMemory, tempMemorySize);
 
-    arrayAlloc(context.render.drawCommands, context.permanentMemory);
-    arrayAlloc(context.entityManager.entities, context.permanentMemory);
+    arrayAlloc(context.render.drawCommands, context.gameMemory);
+    arrayAlloc(context.entityManager.entities, context.gameMemory);
 }
 
 inline void contextClear(Context& context)
@@ -69,14 +73,13 @@ inline void contextClear(Context& context)
     arrayClear(context.entityManager.entities);
     arrayClear(context.render.drawCommands);
 
-    arenaFreeAll(context.permanentMemory);
+    arenaFreeAll(context.gameMemory);
     arenaFreeAll(context.tempMemory);
 }
 
 inline void contextDeinit(Context& context)
 {
-    arenaDeinit(context.permanentMemory);
+    arenaDeinit(context.gameMemory);
     arenaDeinit(context.tempMemory);
+    arenaDeinit(context.platformMemory);
 }
-
-#define CTX(voidPtr) (*(Context*)(voidPtr))

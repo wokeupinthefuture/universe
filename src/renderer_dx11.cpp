@@ -1,5 +1,6 @@
 #include "common/utils.hpp"
 #include "geometry.hpp"
+#include "input.hpp"
 #include "platform.hpp"
 #include "renderer.hpp"
 
@@ -13,13 +14,20 @@
 
 using namespace Microsoft::WRL;
 
-ComPtr<ID3D11Device> device;
-ComPtr<IDXGISwapChain> swapChain;
-ComPtr<ID3D11DeviceContext> deviceContext;
-ComPtr<ID3D11RenderTargetView> rtView;
+static ComPtr<ID3D11Device> device;
+static ComPtr<IDXGISwapChain> swapChain;
+static ComPtr<ID3D11DeviceContext> deviceContext;
+static ComPtr<ID3D11RenderTargetView> rtView;
+static ComPtr<ID3D11DepthStencilView> dsView;
+static ComPtr<ID3D11DepthStencilState> dss;
 
-ComPtr<ID3D11Buffer> vertexBuffers[(i32)MeshType::Max];
-ComPtr<ID3D11Buffer> indexBuffers[(i32)MeshType::Max];
+static ComPtr<ID3D11Buffer> vertexBuffers[(i32)MeshType::Max + (i32)AssetID::Max];
+static ComPtr<ID3D11Buffer> indexBuffers[(i32)MeshType::Max + (i32)AssetID::Max];
+
+static i32 getMeshBufferIndex(Mesh const& mesh)
+{
+    return (i32)mesh.type + (i32)mesh.customMeshID;
+}
 
 struct ConstantBufferFieldMapping
 {
@@ -185,14 +193,8 @@ static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
     return rasterizerState;
 }
 
-static void createScreenRenderTarget(vec2 size)
+static void createRenderTargetAndDepthStencil(vec2 size)
 {
-    ComPtr<ID3D11Resource> backbuffer{};
-    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
-    HR_ASSERT(device->CreateRenderTargetView(backbuffer.Get(), nullptr, rtView.GetAddressOf()));
-
-    deviceContext->OMSetRenderTargets(1, rtView.GetAddressOf(), nullptr);
-
     D3D11_VIEWPORT vp{};
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
@@ -201,15 +203,74 @@ static void createScreenRenderTarget(vec2 size)
     vp.MinDepth = 0.f;
     vp.MaxDepth = 1.f;
     deviceContext->RSSetViewports(1, &vp);
+
+    ComPtr<ID3D11Resource> backbuffer{};
+    HR_ASSERT(swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
+    HR_ASSERT(device->CreateRenderTargetView(backbuffer.Get(), nullptr, rtView.GetAddressOf()));
+
+    D3D11_TEXTURE2D_DESC textureDesc{};
+    textureDesc.Width = size.x;
+    textureDesc.Height = size.y;
+    textureDesc.MipLevels = 1;
+    textureDesc.ArraySize = 1;
+    textureDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Usage = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+    ID3D11Texture2D* texture;
+    HR_ASSERT(device->CreateTexture2D(&textureDesc, nullptr, &texture));
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    dsvDesc.Format = textureDesc.Format;
+    dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+
+    HR_ASSERT(device->CreateDepthStencilView(texture, &dsvDesc, dsView.GetAddressOf()));
+
+    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+
+    dsDesc.DepthEnable = true;
+    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;
+
+    dsDesc.StencilEnable = false;
+    dsDesc.StencilReadMask = 0xFF;
+    dsDesc.StencilWriteMask = 0xFF;
+
+    dsDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+    dsDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+    dsDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+    dsDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    dsDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+    HR_ASSERT(device->CreateDepthStencilState(&dsDesc, &dss));
+
+    deviceContext->OMSetRenderTargets(1, rtView.GetAddressOf(), dsView.Get());
+}
+
+void renderInitGeometry(RenderState& state, const Asset* assets, Arena& permanentMemory, Arena& tempMemory)
+{
+    state.generatedMeshes[(i32)MeshType::Triangle] = generateMesh(MeshType::Triangle);
+    state.generatedMeshes[(i32)MeshType::Quad] = generateMesh(MeshType::Quad);
+    state.generatedMeshes[(i32)MeshType::Cube] = generateMesh(MeshType::Cube);
+    state.generatedMeshes[(i32)MeshType::Sphere] = generateMesh(MeshType::Sphere);
+    state.generatedMeshes[(i32)MeshType::Grid] = generateMesh(MeshType::Grid);
+
+    state.loadedMeshes[(i32)AssetID::ArrowMesh] = loadMesh(assets[(i32)AssetID::ArrowMesh], permanentMemory, tempMemory);
 }
 
 void renderInit(RenderState& state, void* window)
 {
-    const auto& triangle = state.generatedMeshes[(i32)MeshType::Triangle] = generateMesh(MeshType::Triangle);
-    const auto& quad = state.generatedMeshes[(i32)MeshType::Quad] = generateMesh(MeshType::Quad);
-    const auto& cube = state.generatedMeshes[(i32)MeshType::Cube] = generateMesh(MeshType::Cube);
-    const auto& sphere = state.generatedMeshes[(i32)MeshType::Sphere] = generateMesh(MeshType::Sphere);
-    const auto& grid = state.generatedMeshes[(i32)MeshType::Grid] = generateMesh(MeshType::Grid);
+    const auto& triangle = state.generatedMeshes[(i32)MeshType::Triangle];
+    const auto& quad = state.generatedMeshes[(i32)MeshType::Quad];
+    const auto& cube = state.generatedMeshes[(i32)MeshType::Cube];
+    const auto& sphere = state.generatedMeshes[(i32)MeshType::Sphere];
+    const auto& grid = state.generatedMeshes[(i32)MeshType::Grid];
+    const auto& arrow = state.loadedMeshes[(i32)AssetID::ArrowMesh];
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc{};
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -235,35 +296,25 @@ void renderInit(RenderState& state, void* window)
         nullptr,
         &deviceContext));
 
-    createScreenRenderTarget(state.screenSize);
+    createRenderTargetAndDepthStencil(state.screenSize);
 
-    vertexBuffers[(i32)MeshType::Triangle] = createVertexBuffer(triangle.vertices, triangle.verticesCount);
-    indexBuffers[(i32)MeshType::Triangle] = createIndexBuffer(triangle.indices, triangle.indicesCount);
+    vertexBuffers[getMeshBufferIndex(triangle)] = createVertexBuffer(triangle.vertices, triangle.verticesCount);
+    indexBuffers[getMeshBufferIndex(triangle)] = createIndexBuffer(triangle.indices, triangle.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Quad] = createVertexBuffer(quad.vertices, quad.verticesCount);
-    indexBuffers[(i32)MeshType::Quad] = createIndexBuffer(quad.indices, quad.indicesCount);
+    vertexBuffers[getMeshBufferIndex(quad)] = createVertexBuffer(quad.vertices, quad.verticesCount);
+    indexBuffers[getMeshBufferIndex(quad)] = createIndexBuffer(quad.indices, quad.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Cube] = createVertexBuffer(cube.vertices, cube.verticesCount);
-    indexBuffers[(i32)MeshType::Cube] = createIndexBuffer(cube.indices, cube.indicesCount);
+    vertexBuffers[getMeshBufferIndex(cube)] = createVertexBuffer(cube.vertices, cube.verticesCount);
+    indexBuffers[getMeshBufferIndex(cube)] = createIndexBuffer(cube.indices, cube.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Sphere] = createVertexBuffer(sphere.vertices, sphere.verticesCount);
-    indexBuffers[(i32)MeshType::Sphere] = createIndexBuffer(sphere.indices, sphere.indicesCount);
+    vertexBuffers[getMeshBufferIndex(sphere)] = createVertexBuffer(sphere.vertices, sphere.verticesCount);
+    indexBuffers[getMeshBufferIndex(sphere)] = createIndexBuffer(sphere.indices, sphere.indicesCount);
 
-    vertexBuffers[(i32)MeshType::Grid] = createVertexBuffer(grid.vertices, grid.verticesCount);
-    indexBuffers[(i32)MeshType::Grid] = createIndexBuffer(grid.indices, grid.indicesCount);
+    vertexBuffers[getMeshBufferIndex(grid)] = createVertexBuffer(grid.vertices, grid.verticesCount);
+    indexBuffers[getMeshBufferIndex(grid)] = createIndexBuffer(grid.indices, grid.indicesCount);
 
-    u32* strides = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
-    u32* offsets = (u32*)alloca(sizeof(u32) * (i32)MeshType::Max);
-    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
-    {
-        strides[i] = sizeof(Vertex);
-        offsets[i] = 0;
-    }
-
-    ID3D11Buffer* vertexBufferPointers[(i32)MeshType::Max];
-    for (i32 i = 0; i < (i32)MeshType::Max; ++i)
-        vertexBufferPointers[i] = vertexBuffers[i].Get();
-    deviceContext->IASetVertexBuffers(0, (i32)MeshType::Max, vertexBufferPointers, strides, offsets);
+    vertexBuffers[getMeshBufferIndex(arrow)] = createVertexBuffer(arrow.vertices, arrow.verticesCount);
+    // indexBuffers[getMeshBufferIndex(arrow)] = createIndexBuffer(arrow.indices, arrow.indicesCount);
 
     shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::PATH);
     shaders[(i32)ShaderType::Unlit] = createShader(Shaders::Unlit::PATH);
@@ -290,6 +341,10 @@ void renderDeinit()
         deviceContext.Reset();
     if (rtView)
         rtView.Reset();
+    if (dss)
+        dss.Reset();
+    if (dsView)
+        dsView.Reset();
     if (swapChain)
         swapChain.Reset();
     if (device)
@@ -356,6 +411,8 @@ static void writeShaderVariables(ShaderType shader, const ShaderVariable* variab
 
 void renderDraw(DrawCommand const& command)
 {
+    ENSURE(command.mesh != nullptr);
+
     writeShaderVariables(command.shader, command.variables, MAX_SHADER_VARIABLES);
 
     deviceContext->IASetPrimitiveTopology(command.rasterizerState == RasterizerState::Wireframe
@@ -370,10 +427,17 @@ void renderDraw(DrawCommand const& command)
     deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState].Get());
 
     u32 stride = sizeof(Vertex), offset = 0;
-    deviceContext->IASetVertexBuffers(0, 1, vertexBuffers[(i32)command.mesh->type].GetAddressOf(), &stride, &offset);
-    deviceContext->IASetIndexBuffer(indexBuffers[(i32)command.mesh->type].Get(), DXGI_FORMAT_R32_UINT, 0);
+
+    deviceContext->IASetVertexBuffers(0, 1, vertexBuffers[getMeshBufferIndex(*command.mesh)].GetAddressOf(), &stride, &offset);
     if (command.mesh->isIndexed)
+    {
+        deviceContext->IASetIndexBuffer(indexBuffers[getMeshBufferIndex(*command.mesh)].Get(), DXGI_FORMAT_R32_UINT, 0);
         deviceContext->DrawIndexed(command.mesh->indicesCount, 0, 0);
+    }
+    else
+    {
+        deviceContext->Draw(command.mesh->verticesCount, 0);
+    }
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color)
@@ -382,13 +446,15 @@ void renderClearAndResize(RenderState& state, glm::vec4 color)
     {
         deviceContext->OMSetRenderTargets(0, 0, nullptr);
         rtView.Reset();
-        HR_ASSERT(swapChain->ResizeBuffers(0, state.screenSize.x, state.screenSize.y, DXGI_FORMAT_UNKNOWN, 0));
-        createScreenRenderTarget(state.screenSize);
-
+        dsView.Reset();
+        dss.Reset();
+        HR_ASSERT(swapChain->ResizeBuffers(0, (UINT)state.screenSize.x, (UINT)state.screenSize.y, DXGI_FORMAT_UNKNOWN, 0));
+        createRenderTargetAndDepthStencil(state.screenSize);
         state.needsToResize = false;
     }
 
     deviceContext->ClearRenderTargetView(rtView.Get(), &color.x);
+    deviceContext->ClearDepthStencilView(dsView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
 
 void renderPresentAndResize()

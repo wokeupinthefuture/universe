@@ -80,6 +80,9 @@ int main()
     context.platform.dpi = Platform::getDpi();
     defer({ Platform::closeWindow(context.platform.window); });
 
+    context.platform.assets[(i32)AssetID::ArrowMesh] =
+        Platform::loadAsset(ASSETS_PATH[(i32)AssetID::ArrowMesh], AssetType::ObjMesh, context.platformMemory);
+
     auto game = loadGameCode();
 
     game.init(context);

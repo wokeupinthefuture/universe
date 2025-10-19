@@ -6,6 +6,7 @@
 #include "common/math.cpp"
 #include "geometry.cpp"
 #include "input.hpp"
+#include "renderer.hpp"
 #include "shaders.cpp"
 #include "renderer_dx11.cpp"
 #include "gui.cpp"
@@ -44,11 +45,11 @@ Entity* pushEntity(HeapArray<Entity>& entities)
     return arrayPush(entities, entity);
 }
 
-Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, MeshType mesh)
+Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, MeshType mesh, AssetID customMeshID = AssetID::Max)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
-    entity.drawCommand = pushDrawCmd(renderState, mesh);
+    entity.drawCommand = pushDrawCmdEx(renderState, mesh, customMeshID);
 
     switch (mesh)
     {
@@ -58,6 +59,15 @@ Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, Mesh
         case MeshType::Sphere: entity.name = "sphere"; break;
         case MeshType::Triangle: entity.name = "triangle"; break;
         case MeshType::Quad: entity.name = "quad"; break;
+        case MeshType::Custom:
+        {
+            switch (customMeshID)
+            {
+                default: LOGIC_ERROR();
+                case AssetID::ArrowMesh: entity.name = "arrow";
+            }
+        }
+        break;
     }
 
     return arrayPush(entities, entity);
@@ -125,6 +135,7 @@ void gameInit(Context& ctx)
     setInternalPointer(ctx.input);
     setInternalPointer(ctx.entityManager, ctx.tempMemory);
 
+    renderInitGeometry(ctx.render, ctx.platform.assets, ctx.gameMemory, ctx.tempMemory);
     renderInit(ctx.render, ctx.platform.window);
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
@@ -142,6 +153,7 @@ void gameInit(Context& ctx)
 
     ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Grid);
     ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Sphere);
+    setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
     ctx.gameState.cube = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Cube);
     setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
     setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
@@ -156,8 +168,14 @@ void gameInit(Context& ctx)
     ctx.gameState.lightOrigin->name = "light origin";
     setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
     ctx.gameState.light = pushLight(ctx.entityManager.entities, ctx.render, LightType::Point);
-    setParent(*ctx.gameState.light, *ctx.gameState.lightOrigin);
-    setLocalPosition(*ctx.gameState.light, vec3(0, 0, 2));
+    setParent(*ctx.gameState.light, ctx.gameState.lightOrigin, true);
+
+    setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
+
+    ctx.gameState.arrow = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Custom, AssetID::ArrowMesh);
+    setColor(*ctx.gameState.arrow, vec4(0.5f, 0.5f, 0.5f, 1.f));
+    setParent(*ctx.gameState.arrow, ctx.gameState.sphere);
+    setLocalPosition(*ctx.gameState.arrow, vec3(0, 2, 0));
 
     for (auto& entity : ctx.entityManager.entities)
         if (hasType(entity, EntityType::Drawable))
@@ -348,31 +366,39 @@ void guiEntityContents(Context& ctx, Entity& entity)
     ImGui::PopID();
 }
 
-void checkReparentSource(Entity& entity)
+void guiCheckEntityReparentSource(Entity& toReparent)
 {
     if (ImGui::BeginDragDropSource())
     {
-        const auto entityPtr = &entity;
+        const auto entityPtr = &toReparent;
         ImGui::SetDragDropPayload("reparent", &entityPtr, sizeof(void*));
         ImGui::EndDragDropSource();
     }
 }
 
-void checkReparentTarget(Entity& entity)
+void guiCheckEntityReparentTarget(Entity& newParent)
 {
     if (ImGui::BeginDragDropTarget())
     {
-        const auto reparentEntityPayload = ImGui::GetDragDropPayload();
-        const auto result = ImGui::AcceptDragDropPayload("reparent");
-        if (result)
+        if (const auto entityPayload = ImGui::AcceptDragDropPayload("reparent"); entityPayload && entityPayload->Data)
         {
-            if (reparentEntityPayload && reparentEntityPayload->Data)
-            {
-                const auto toReparent = (Entity**)reparentEntityPayload->Data;
-                setParent(**toReparent, entity);
-            }
+            const auto toReparent = (Entity**)entityPayload->Data;
+            setParent(**toReparent, &newParent);
         }
         ImGui::EndDragDropTarget();
+    }
+}
+
+void guiEntityContextMenu(Entity& entity)
+{
+    char label[256]{};
+    sprintf(label, "%llu", (u64)&entity);
+    if (ImGui::BeginPopupContextItem(label))
+    {
+        if (ImGui::MenuItem("unparent"))
+            setParent(entity, nullptr);
+
+        ImGui::EndPopup();
     }
 }
 
@@ -398,8 +424,10 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     {
         const auto open = ImGui::TreeNodeEx(entity.name, nodeFlags);
 
-        checkReparentSource(entity);
-        checkReparentTarget(entity);
+        guiEntityContextMenu(entity);
+
+        guiCheckEntityReparentSource(entity);
+        guiCheckEntityReparentTarget(entity);
 
         if (ImGui::IsItemClicked())
         {
@@ -427,8 +455,10 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 
         ImGui::TreeNodeEx(entity.name, nodeFlags);
 
-        checkReparentSource(entity);
-        checkReparentTarget(entity);
+        guiEntityContextMenu(entity);
+
+        guiCheckEntityReparentSource(entity);
+        guiCheckEntityReparentTarget(entity);
 
         if (ImGui::IsItemClicked())
         {
@@ -443,17 +473,6 @@ void onGui(Context& ctx)
 {
     ImGui::Begin("universe");
 
-    const auto dndPayload = ImGui::GetDragDropPayload();
-    if (dndPayload && dndPayload->Data)
-    {
-        const auto entity = ((Entity*)dndPayload->Data);
-        ImGui::Text("dnd entity: %s", entity->name);
-    }
-    else
-    {
-        ImGui::Text("dnd entity: null");
-    }
-
     ImGui::Text("pause: %s", ctx.pause ? "true" : "false");
     ImGui::SetNextItemWidth(GUI_SLIDER_WIDTH);
     ImGui::DragFloat("time scale", &ctx.timeScale, 0.1f);
@@ -462,12 +481,15 @@ void onGui(Context& ctx)
                        ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
     if (ImGui::BeginTable("table", 2, flags))
     {
+
         ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_NoHide);
         ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHide, 40);
         ImGui::TableHeadersRow();
 
         for (auto& entity : getEntities())
         {
+            if (entity.parent)
+                continue;
             guiEntityHierarchy(ctx, entity, flags, 0);
         }
 
@@ -518,6 +540,7 @@ void gameUpdateAndRender(Context& ctx)
     const auto speed = 75.f * dt;
     const auto sine = std::sin(time) * dt;
     addLocalRotation(*ctx.gameState.cube, vec3(0, speed, 0));
+    addLocalRotation(*ctx.gameState.sphere, vec3(speed * 0.7, 0, 0));
     addLocalPosition(*ctx.gameState.lightOrigin, vec3(0, sine, 0));
 
     if (ctx.render.needsToResize)

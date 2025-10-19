@@ -41,6 +41,30 @@
     } while (0)
 #endif
 
+static constexpr size_t MAX_ASSETS = 10;
+
+enum class AssetID
+{
+    ArrowMesh,
+    Max
+};
+
+static constexpr const char* ASSETS_PATH[] = {"resources/models/arrow.obj"};
+
+enum class AssetType
+{
+    ObjMesh,
+    Max
+};
+
+struct Asset
+{
+    const u8* data;
+    size_t size;
+    AssetType type;
+    AssetID id;
+};
+
 struct PlatformToGameBuffer
 {
     void* window;
@@ -50,6 +74,7 @@ struct PlatformToGameBuffer
     vec2 lastScreenSize;
     vec2 screenSize;
     void* guiWindowEventCallback;
+    Asset assets[MAX_ASSETS];
 };
 
 namespace Platform
@@ -74,6 +99,8 @@ void* loadDynamicLib(const char* dllName);
 void unloadDynamicLib(void* lib);
 void* loadDynamicFunc(void* dll, const char* funcName);
 #define Platform_loadDynamicFunc(lib, funcName) decltype (&funcName)(Platform::loadDynamicFunc((lib), (#funcName)))
+
+Asset loadAsset(const char* path, AssetType type, Arena& memory);
 
 void setInternalPointer(PlatformToGameBuffer& buffer, InputState& input);
 

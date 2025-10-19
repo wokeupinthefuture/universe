@@ -1,11 +1,12 @@
 #include "geometry.hpp"
 #include "common/utils.hpp"
 #include "platform.hpp"
+#include "common/memory.hpp"
 
 static Mesh generateSphere(
     float radius, u32 stacks, u32 slices, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
 {
-    Mesh mesh;
+    Mesh mesh{};
 
     mesh.vertices = outVertices;
     mesh.verticesCount = verticesCount;
@@ -63,7 +64,7 @@ static Mesh generateSphere(
 static Mesh generateGrid(
     i32 gridX, i32 gridY, float spacing, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
 {
-    Mesh mesh;
+    Mesh mesh{};
 
     mesh.vertices = outVertices;
     mesh.verticesCount = verticesCount;
@@ -101,7 +102,7 @@ static Mesh generateGrid(
 
 Mesh generateMesh(MeshType type)
 {
-    Mesh mesh;
+    Mesh mesh{};
 
     switch (type)
     {
@@ -248,6 +249,138 @@ Mesh generateMesh(MeshType type)
     }
 
     mesh.type = type;
+
+    return mesh;
+}
+
+Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
+{
+    ENSURE(asset.type == AssetType::ObjMesh);
+
+    auto data = arenaAlloc(tempMemory, asset.size, sizeof(u8));
+    memcpy(data, asset.data, asset.size);
+
+    size_t posCount = 0;
+    size_t normalCount = 0;
+    size_t uvCount = 0;
+    size_t verticesCount = 0;
+
+    auto line = strtok((char*)data, "\n");
+    while (line)
+    {
+        char lineHeader[256]{};
+        (void)sscanf(line, "%s", lineHeader);
+
+        auto isPosLine = strcmp(lineHeader, "v") == 0;
+        auto isNormalLine = strcmp(lineHeader, "vn") == 0;
+        auto isUVLine = strcmp(lineHeader, "vt") == 0;
+        auto isIndexLine = strcmp(lineHeader, "f") == 0;
+
+        if (isPosLine)
+            posCount++;
+        else if (isNormalLine)
+            normalCount++;
+        else if (isUVLine)
+            uvCount++;
+        else if (isIndexLine)
+            verticesCount++;
+
+        line = strtok(nullptr, "\n");
+    }
+
+    memcpy(data, asset.data, asset.size);
+
+    auto posBuffer = arenaAllocArray<vec3>(tempMemory, posCount);
+    auto normalBuffer = arenaAllocArray<vec3>(tempMemory, normalCount);
+    auto uvBuffer = arenaAllocArray<vec2>(tempMemory, uvCount);
+
+    auto posIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
+    auto normalIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
+    auto uvIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
+
+    line = strtok((char*)data, "\n");
+    for (size_t posIdx = 0, normalIdx = 0, uvIdx = 0, indexIdx = 0; line;)
+    {
+        char lineHeader[256]{};
+        (void)sscanf(line, "%s", lineHeader);
+
+        auto isPosLine = strcmp(lineHeader, "v") == 0;
+        auto isNormalLine = strcmp(lineHeader, "vn") == 0;
+        auto isUVLine = strcmp(lineHeader, "vt") == 0;
+        auto isIndexLine = strcmp(lineHeader, "f") == 0;
+
+        if (isPosLine)
+        {
+            auto& vec = posBuffer[posIdx];
+            const auto matches = sscanf(line + 2, "%f %f %f", &vec.x, &vec.y, &vec.z);
+            ENSURE(matches == 3);
+            posIdx++;
+        }
+        else if (isNormalLine)
+        {
+            auto& vec = normalBuffer[normalIdx];
+            const auto matches = sscanf(line + 2, "%f %f %f", &vec.x, &vec.y, &vec.z);
+            ENSURE(matches == 3);
+            normalIdx++;
+        }
+        else if (isUVLine)
+        {
+            auto& vec = uvBuffer[uvIdx];
+            const auto matches = sscanf(line + 2, "%f %f", &vec.x, &vec.y);
+            ENSURE(matches == 2);
+            uvIdx++;
+        }
+        else if (isIndexLine)
+        {
+            u32 posIndices[3]{}, normalIndices[3]{}, uvIndices[3]{};
+            const auto matches = sscanf(line + 2,
+                "%u/%u/%u %u/%u/%u %u/%u/%u",
+                &posIndices[0],
+                &normalIndices[0],
+                &uvIndices[0],
+                &posIndices[1],
+                &normalIndices[1],
+                &uvIndices[1],
+                &posIndices[2],
+                &normalIndices[2],
+                &uvIndices[2]);
+            ENSURE(matches == 9);
+
+            posIndicesBuffer[indexIdx * 3 + 0] = posIndices[0];
+            posIndicesBuffer[indexIdx * 3 + 1] = posIndices[1];
+            posIndicesBuffer[indexIdx * 3 + 2] = posIndices[2];
+            normalIndicesBuffer[indexIdx * 3 + 0] = normalIndices[0];
+            normalIndicesBuffer[indexIdx * 3 + 1] = normalIndices[1];
+            normalIndicesBuffer[indexIdx * 3 + 2] = normalIndices[2];
+            uvIndicesBuffer[indexIdx * 3 + 0] = uvIndices[0];
+            uvIndicesBuffer[indexIdx * 3 + 1] = uvIndices[1];
+            uvIndicesBuffer[indexIdx * 3 + 2] = uvIndices[2];
+
+            indexIdx++;
+        }
+
+        line = strtok(nullptr, "\n");
+    }
+
+    verticesCount *= 3;
+
+    auto vertices = arenaAllocArray<Vertex>(permanentMemory, verticesCount);
+
+    for (size_t i = 0; i < verticesCount; ++i)
+    {
+        const auto posIdx = posIndicesBuffer[i];
+        vertices[i].pos = posBuffer[posIdx - 1];
+        const auto normalIdx = normalIndicesBuffer[i];
+        vertices[i].normal = normalBuffer[normalIdx - 1];
+        // vertices[i].uv = uvIndicesBuffer[uvIndicesBuffer[i - 1]];
+    }
+
+    Mesh mesh{};
+
+    mesh.vertices = vertices;
+    mesh.verticesCount = verticesCount;
+    mesh.isIndexed = false;
+    mesh.type = MeshType::Custom;
 
     return mesh;
 }

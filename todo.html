@@ -6,36 +6,53 @@
   <style>
     body {
       margin: 0; padding: 0;
-      background: #181b1f;
+      background: transparent;
       height: 100vh;
       width: 100vw;
       display: flex;
       justify-content: flex-end;
       align-items: flex-start;
+      font-family: "Consolas", "Cascadia Mono", "Menlo", "DejaVu Sans Mono", monospace; /* ImGui-like monospace */
     }
+    .imgui-window {
+      background: rgba(37,37,38,0.98); /* WindowBg */
+      border: 1px solid #5a5d63; /* thin outer frame */
+      border-radius: 0; /* perfectly squared */
+      width: 300px;
+      height: 215px;
+      box-shadow: none;
+    }
+    .imgui-title {
+      background: #2f6db6; /* TitleBgActive (screenshot-like) */
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 20px;
+      padding: 2px 6px;
+      border-bottom: 1px solid #3a6ca3; /* thin edge */
+      border-top-left-radius: 0; /* squared */
+      border-top-right-radius: 0; /* squared */
+      user-select: none;
+    }
+    .imgui-body { padding: 6px; }
     .container {
-      background: rgba(22, 22, 29, 0.9);
-      box-shadow: 0 4px 32px 0 rgba(0,0,0,0.28);
-      border-radius: 8px;
-      padding: 0 10px 10px 0px;
-      min-width: 275px;
-      max-width: 275px;
-      /* min-height: 290px; */
-      /* max-height: 350px; */
+      background: transparent; /* move window bg to .imgui-window */
+      border: none;
+      border-radius: 0;
+      padding: 0; /* list area controls spacing */
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      font-family: 'Liberation Mono', monospace;
-      color: #8992a7;
+      color: #ffffffff; /* ImGui Text */
     }
     .section-title {
-      color: #c4746e;
-      font-weight: 600;
-      font-size: 0.92em;
+      color: #c7c7c7; /* Header */
+      font-weight: 700;
+      font-size: 0.9em;
       line-height: 1.2em;
-      margin: 18px 0 0 0;
-      letter-spacing: 0.07em;
-      text-shadow: 0 2px 8px #1a180b44;
+      margin: 6px 0 4px 2px; /* subtle top margin */
+      letter-spacing: 0.02em;
+      text-shadow: none;
     }
     .section-title:first-child {
       margin-top: 2px;
@@ -47,80 +64,92 @@
     }
     li { margin: 0 0 2px 0; padding: 0; }
     .finished {
-      color: #757575;
+      color: #808080; /* TextDisabled */
       text-decoration: line-through;
       font-size: 1em;
       line-height: 1.45em;
+      text-shadow: none;
     }
     .current {
-      color: #8a9a7b;
-      font-weight: 600;
+      color: #ffffff; /* Text */
+      font-weight: 700;
       font-size: 1em;
       line-height: 1.45em;
+      text-shadow: none;
     }
     .todo {
-      color: #8992a7;
+      color: #e6e6e6;
       font-size: 1em;
       line-height: 1.45em;
+      text-shadow: none;
     }
     .main-list {
-      margin: 10px 0px 0px 0px;
-      padding: 0;
+      margin: 6px 0 0 0; /* tighter */
+      padding: 0; /* list reset */
       list-style: none;
-      /* min-height: 220px; */
-      /* max-height: 260px; */
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
       align-items: stretch;
       width: 100%;
-      gap: 0;
+      gap: 0; /* ImGui rows are tight, separators/striping used instead */
+      background: #0f0f10; /* dark panel inside window */
+      border: 1px solid #2e3035; /* ImGui child border */
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
     }
     .main-list li {
       display: flex;
-      align-items: flex-start;
-      justify-content: flex-end;
-      /* min-height: 2em; */
-      padding: 0.275em 0.3em;
-      font-size: 1em;
-      border-radius: 3px;
-      transition: background 0.15s, color 0.15s;
-      text-align: right;
-      margin-bottom: 3px;
+      align-items: center;
+      justify-content: flex-start; /* LTR */
+      padding: 3px 6px; /* compact item rows */
+      font-size: 13px; /* ImGui-like density */
+      border-radius: 0;
+      transition: background 0.12s ease, color 0.12s ease;
+      text-align: left;
+      margin: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      min-height: 18px; /* ensure row height */
     }
-    .main-list li:last-child {
-      margin-bottom: 0;
-    }
+    .main-list li:nth-child(odd)  { background: rgba(255,255,255,0.02); } /* striped rows: odd */
+    .main-list li:nth-child(even) { background: rgba(255,255,255,0.05); } /* striped rows: even */
+    .main-list li:hover { background: rgba(66, 150, 250, 0.13); } /* HeaderHovered */
     .completed-item {
-      color: #757575;
+      color: #808080; /* TextDisabled */
       text-decoration: line-through;
-      opacity: 0.7;
+      opacity: 1;
+      background: transparent; /* keep stripes where applicable */
     }
     .current-item {
-      color: #e6c384;
-      background: #223249;
+      color: #ffffff;
+      background: rgba(66, 150, 250, 0.35); /* ImGui HeaderActive */
       font-weight: 700;
-      font-size: 1.09em;
-      box-shadow: 0 3px 10px 0 rgba(34,48,73,0.10);
+      font-size: 1.02em;
       border-left: none;
-      border-right: 3px solid #e6c384;
-      z-index: 1;
+      border-right: none;
     }
     .todo-item {
-      color: #8992a7;
-      opacity: 0.97;
+      color: #e6e6e6;
+      opacity: 1;
       font-weight: 500;
+      background: transparent;
     }
     .placeholder-item {
-      opacity: 0.23;
+      opacity: 0.18;
       pointer-events: none;
       background: transparent;
     }
+
+    /* remove accent dot */
   </style>
 </head>
 <body>
-  <div class="container" id="todo-container">
-    Loading...
+  <div class="imgui-window">
+    <div class="imgui-title">todo</div>
+    <div class="imgui-body">
+      <div class="container" id="todo-container">Loading...</div>
+    </div>
   </div>
   <script>
     /*
@@ -172,3 +201,4 @@
   </script>
 </body>
 </html>
+

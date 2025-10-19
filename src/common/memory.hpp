@@ -21,6 +21,7 @@ inline void arenaInit(Arena& arena, size_t sizeBytes, void* startAddr = nullptr)
 
 inline void* arenaAlloc(Arena& arena, size_t size, ptrdiff_t aligning)
 {
+    assert(size != 0);
     assert(!(aligning & (aligning - 1)));
 
     const auto remainder = size & (aligning - 1);

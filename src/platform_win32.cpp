@@ -439,4 +439,29 @@ void* loadDynamicFunc(void* lib, const char* funcName)
     return (void*)GetProcAddress((HMODULE)lib, funcName);
 }
 
+Asset loadAsset(const char* path, AssetType type, Arena& memory)
+{
+    const auto file = CreateFile(path,                    // file to open
+        GENERIC_READ,                                     // open for reading
+        FILE_SHARE_READ,                                  // share for reading
+        NULL,                                             // default security
+        OPEN_EXISTING,                                    // existing file only
+        FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_READONLY,  // normal file
+        NULL);                                            // no attr. template
+
+    ENSURE(file != INVALID_HANDLE_VALUE);
+
+    DWORD fileSize = GetFileSize(file, nullptr);
+
+    auto buffer = arenaAlloc(memory, fileSize, sizeof(u8));
+
+    DWORD bytesRead{};
+    const auto readResult = ReadFile(file, buffer, fileSize, &bytesRead, nullptr);
+    ENSURE(readResult != FALSE && bytesRead == fileSize);
+
+    CloseHandle(file);
+
+    return Asset{.data = (u8*)buffer, .size = fileSize, .type = type};
+}
+
 }  // namespace Platform
