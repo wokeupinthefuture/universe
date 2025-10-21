@@ -41,7 +41,7 @@ void arrayClear(HeapArray<T>& array)
 TRIVIAL_TEMPLATE_T(T)
 void arrayAlloc(HeapArray<T>& array, Arena& arena)
 {
-    array.data = arenaAllocArray<T>(arena, MAX_HEAP_ARRAY_SIZE / sizeof(T));
+    array.data = arenaAlloc<T>(arena, MAX_HEAP_ARRAY_SIZE / sizeof(T));
     arrayClear(array);
 }
 

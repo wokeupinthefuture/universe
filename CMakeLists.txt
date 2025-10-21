@@ -66,31 +66,21 @@ if(MSVC)
 endif()
 
 # dependencies
-function (use_local_dependency library)
-    add_subdirectory(third_party/${library})
-    target_link_libraries(${PLATFORM_EXECUTABLE} PRIVATE ${library})    
-    target_link_libraries(${GAME_DLL} PRIVATE ${library})
-endfunction()
+include_directories(PUBLIC third_party)
 
-function (use_shared_lib lib)
-    set(lib_PATH "third_party/${lib}")
-    file(GLOB lib_SOURCES ${lib_PATH}/*.cpp)
+add_subdirectory(third_party/glm)
+target_link_libraries(${GAME_DLL} PRIVATE glm)    
+target_link_libraries(${PLATFORM_EXECUTABLE} PRIVATE glm)    
 
-    add_library(${lib} SHARED ${lib_SOURCES})
-
-    include_directories(PUBLIC ${lib_PATH})
-
-    target_link_libraries(${PLATFORM_EXECUTABLE} PUBLIC ${lib})
-    target_link_libraries(${GAME_DLL} PUBLIC ${lib})
-endfunction()
-
-include_directories(PUBLIC "third_party")
-
-set(BUILD_SHARED_LIBS ON)
-use_shared_lib(imgui)
-set(BUILD_SHARED_LIBS OFF)
-
-use_local_dependency(glm)
+add_library(imgui
+    third_party/imgui/imgui.cpp
+	third_party/imgui/imgui_draw.cpp
+	third_party/imgui/imgui_tables.cpp
+	third_party/imgui/imgui_widgets.cpp
+	third_party/imgui/backends/imgui_impl_dx11.cpp
+	third_party/imgui/backends/imgui_impl_win32.cpp)
+include_directories(PUBLIC third_party/imgui)
+target_link_libraries(${GAME_DLL} PUBLIC imgui)
 
 target_link_libraries(${GAME_DLL} PUBLIC d3d11)
 target_link_libraries(${GAME_DLL} PUBLIC d3dcompiler)

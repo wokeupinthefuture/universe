@@ -266,6 +266,7 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
             findEraseChild(*entity.parent, entity);
         entity.parent = nullptr;
 
+        entity.isWorldMatrixDirty = true;
         updateTransform(entity);
 
         return;
@@ -295,7 +296,51 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
         entity.scale = vec3(1.f, 1.f, 1.f);
     }
 
+    entity.isWorldMatrixDirty = true;
     updateTransform(entity);
+}
+
+void setColor(Entity& entity, vec4 color)
+{
+    setShaderVariableVec4(*entity.drawCommand, "objectColor", color);
+
+    if (hasType(entity, EntityType::Light))
+    {
+        entity.lightColor = color;
+        for (auto& other : getEntities())
+        {
+            if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+                setShaderVariableVec4(*other.drawCommand, "lightColor", color);
+        }
+    }
+}
+
+void setLightType(Entity& light, LightType type)
+{
+    ENSURE(hasType(light, EntityType::Light));
+
+    light.lightType = type;
+
+    for (auto& other : getEntities())
+    {
+        if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+            setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
+    }
+}
+
+void setLightDirection(Entity& light, vec3 direction)
+{
+    ENSURE(hasType(light, EntityType::Light));
+
+    light.lightDirection = direction;
+
+    for (const auto& entity : getEntities())
+    {
+        if (hasType(entity, EntityType::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
+        {
+            setShaderVariableVec3(*entity.drawCommand, "lightDirection", light.lightDirection);
+        }
+    }
 }
 
 vec3 getForwardVector(Entity& entity)

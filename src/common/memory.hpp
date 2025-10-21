@@ -7,57 +7,49 @@ struct Arena
 {
     u8* buffer;
     size_t size;
-    size_t previousOffset;
-    size_t currentOffset;
+    size_t used;
 };
 
 inline void arenaInit(Arena& arena, size_t sizeBytes, void* startAddr = nullptr)
 {
     arena.buffer = (u8*)Platform::allocMemory(sizeBytes, startAddr);
     arena.size = sizeBytes;
-    arena.currentOffset = 0;
-    arena.previousOffset = 0;
+    arena.used = 0;
 }
 
-inline void* arenaAlloc(Arena& arena, size_t size, ptrdiff_t aligning)
+inline void* arenaAlloc(Arena& arena, size_t allocSize, size_t allocAlign = alignof(decltype(*Arena::buffer)))
 {
-    assert(size != 0);
-    assert(!(aligning & (aligning - 1)));
+    const auto alignmentIsPowerOfTwo = !(allocAlign & (allocAlign - 1));
+    assert(allocSize != 0);
+    assert(allocAlign != 0 && alignmentIsPowerOfTwo);
 
-    const auto remainder = size & (aligning - 1);
-    const auto padding = remainder != 0 ? (aligning - remainder) : 0;
-    const auto sizeWithPadding = size + padding;
-    const auto currentOffset = arena.currentOffset;
-    const auto ptr = arena.buffer + currentOffset;
+    const auto currentPtr = (uintptr_t)(arena.buffer + arena.used);
+    const auto remainder = currentPtr & (allocAlign - 1);
+    const auto padding = (allocAlign - remainder) % allocAlign;
 
-    if (arena.currentOffset + sizeWithPadding <= arena.size)
-    {
-        memset(ptr, 0, sizeWithPadding);
-        arena.currentOffset += sizeWithPadding;
-        return ptr;
-    }
-    else
-    {
-        return nullptr;
-    }
+    assert(arena.used + allocSize + padding <= arena.size);
+
+    const auto ptr = arena.buffer + arena.used + padding;
+    memset(ptr, 0, allocSize);
+    arena.used += allocSize + padding;
+    return ptr;
 }
 
 template <typename T>
-inline T* arenaAllocArray(Arena& arena, size_t count)
+inline T* arenaAlloc(Arena& arena, size_t count)
 {
     return (T*)arenaAlloc(arena, sizeof(T) * count, alignof(T));
 }
 
 template <typename T>
-inline T* arenaAllocTyped(Arena& arena)
+inline T* arenaAlloc(Arena& arena)
 {
-    return arenaAllocArray<T>(arena, 1);
+    return (T*)arenaAlloc(arena, sizeof(T), alignof(T));
 }
 
 inline void arenaFreeAll(Arena& arena)
 {
-    arena.currentOffset = 0;
-    arena.previousOffset = 0;
+    arena.used = 0;
 }
 
 inline void arenaDeinit(Arena& arena)
@@ -67,6 +59,5 @@ inline void arenaDeinit(Arena& arena)
 
     arena.buffer = nullptr;
     arena.size = 0;
-    arena.previousOffset = 0;
-    arena.currentOffset = 0;
+    arena.used = 0;
 }

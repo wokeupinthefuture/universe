@@ -13,21 +13,6 @@
 #include "entity.cpp"
 #include "input.cpp"
 
-void setColor(Entity& entity, vec4 color)
-{
-    setShaderVariableVec4(*entity.drawCommand, "objectColor", color);
-
-    if (hasType(entity, EntityType::Light))
-    {
-        entity.lightColor = color;
-        for (auto& other : getEntities())
-        {
-            if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
-                setShaderVariableVec4(*other.drawCommand, "lightColor", color);
-        }
-    }
-}
-
 Entity defaultEntity()
 {
     Entity e{};
@@ -39,13 +24,13 @@ Entity defaultEntity()
     return e;
 }
 
-Entity* pushEntity(HeapArray<Entity>& entities)
+Entity* pushEntity()
 {
     auto entity = defaultEntity();
-    return arrayPush(entities, entity);
+    return arrayPush(getEntities(), entity);
 }
 
-Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, MeshType mesh, AssetID customMeshID = AssetID::Max)
+Entity* pushDrawable(RenderState& renderState, MeshType mesh, AssetID customMeshID = AssetID::Max)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
@@ -70,38 +55,10 @@ Entity* pushDrawable(HeapArray<Entity>& entities, RenderState& renderState, Mesh
         break;
     }
 
-    return arrayPush(entities, entity);
+    return arrayPush(getEntities(), entity);
 }
 
-void setLightType(Entity& light, LightType type)
-{
-    ENSURE(hasType(light, EntityType::Light));
-
-    light.lightType = type;
-
-    for (auto& other : getEntities())
-    {
-        if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
-            setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
-    }
-}
-
-void setLightDirection(Entity& light, vec3 direction)
-{
-    ENSURE(hasType(light, EntityType::Light));
-
-    light.lightDirection = direction;
-
-    for (const auto& entity : getEntities())
-    {
-        if (hasType(entity, EntityType::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
-        {
-            setShaderVariableVec3(*entity.drawCommand, "lightDirection", light.lightDirection);
-        }
-    }
-}
-
-Entity* pushLight(HeapArray<Entity>& entities, RenderState& renderState, LightType type)
+Entity* pushLight(RenderState& renderState, LightType type)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Light | EntityType::Drawable;
@@ -121,7 +78,7 @@ Entity* pushLight(HeapArray<Entity>& entities, RenderState& renderState, LightTy
     setColor(entity, vec4(1, 1, 1, 1));
     setLocalScale(entity, vec3(0.1f));
 
-    return arrayPush(entities, entity);
+    return arrayPush(getEntities(), entity);
 }
 
 void onResize(Context& ctx)
@@ -151,10 +108,10 @@ void gameInit(Context& ctx)
 
     onResize(ctx);
 
-    ctx.gameState.grid = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Grid);
-    ctx.gameState.sphere = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Sphere);
+    ctx.gameState.grid = pushDrawable(ctx.render, MeshType::Grid);
+    ctx.gameState.sphere = pushDrawable(ctx.render, MeshType::Sphere);
     setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
-    ctx.gameState.cube = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Cube);
+    ctx.gameState.cube = pushDrawable(ctx.render, MeshType::Cube);
     setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
     setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
     setColor(*ctx.gameState.sphere, vec4(0.2f, 1.f, 0.5f, 1.f));
@@ -164,15 +121,15 @@ void gameInit(Context& ctx)
     ctx.gameState.cameraController.speed = 1.f;
     ctx.gameState.cameraController.sensitivity = 5.f;
 
-    ctx.gameState.lightOrigin = pushEntity(ctx.entityManager.entities);
+    ctx.gameState.lightOrigin = pushEntity();
     ctx.gameState.lightOrigin->name = "light origin";
     setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
-    ctx.gameState.light = pushLight(ctx.entityManager.entities, ctx.render, LightType::Point);
+    ctx.gameState.light = pushLight(ctx.render, LightType::Point);
     setParent(*ctx.gameState.light, ctx.gameState.lightOrigin, true);
 
     setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
 
-    ctx.gameState.arrow = pushDrawable(ctx.entityManager.entities, ctx.render, MeshType::Custom, AssetID::ArrowMesh);
+    ctx.gameState.arrow = pushDrawable(ctx.render, MeshType::Custom, AssetID::ArrowMesh);
     setColor(*ctx.gameState.arrow, vec4(0.5f, 0.5f, 0.5f, 1.f));
     setParent(*ctx.gameState.arrow, ctx.gameState.sphere);
     setLocalPosition(*ctx.gameState.arrow, vec3(0, 2, 0));
@@ -383,7 +340,14 @@ void guiCheckEntityReparentTarget(Entity& newParent)
         if (const auto entityPayload = ImGui::AcceptDragDropPayload("reparent"); entityPayload && entityPayload->Data)
         {
             const auto toReparent = (Entity**)entityPayload->Data;
-            setParent(**toReparent, &newParent);
+            if (isKeyPressed(KeyboardKey::KEY_ALT))
+            {
+                setParent(**toReparent, &newParent, false);
+            }
+            else
+            {
+                setParent(**toReparent, &newParent, true);
+            }
         }
         ImGui::EndDragDropTarget();
     }
@@ -452,7 +416,6 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     {
         nodeFlags |= ImGuiTreeNodeFlags_Leaf;
         nodeFlags |= ImGuiTreeNodeFlags_NoTreePushOnOpen;
-
         ImGui::TreeNodeEx(entity.name, nodeFlags);
 
         guiEntityContextMenu(entity);

@@ -60,12 +60,10 @@ enum KeyboardKey
 
     // Modifier keys
     KEY_SHIFT,
-    KEY_CONTROL_LEFT,
-    KEY_CONTROL_RIGHT,
-    KEY_ALT_LEFT,
-    KEY_ALT_RIGHT,
-    KEY_META_LEFT,   // Windows key
-    KEY_META_RIGHT,  // Windows key
+    KEY_CTRL,
+    KEY_ALT,
+    KEY_META_LEFT,
+    KEY_META_RIGHT,
     KEY_CAPS_LOCK,
 
     // Navigation keys

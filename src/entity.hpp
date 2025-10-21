@@ -87,6 +87,10 @@ void setWorldRotation(Entity& entity, vec3 euler);
 void addLocalRotation(Entity& entity, vec3 euler);
 void setWorldScale(Entity& entity, vec3 scale);
 
+void setLightDirection(Entity& light, vec3 direction);
+void setLightType(Entity& light, LightType type);
+void setColor(Entity& entity, vec4 color);
+
 vec3 getRightVector(Entity& entity);
 vec3 getUpVector(Entity& entity);
 vec3 getForwardVector(Entity& entity);

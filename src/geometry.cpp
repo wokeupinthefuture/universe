@@ -257,7 +257,7 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 {
     ENSURE(asset.type == AssetType::ObjMesh);
 
-    auto data = arenaAlloc(tempMemory, asset.size, sizeof(u8));
+    auto data = arenaAlloc(tempMemory, asset.size);
     memcpy(data, asset.data, asset.size);
 
     size_t posCount = 0;
@@ -290,13 +290,13 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 
     memcpy(data, asset.data, asset.size);
 
-    auto posBuffer = arenaAllocArray<vec3>(tempMemory, posCount);
-    auto normalBuffer = arenaAllocArray<vec3>(tempMemory, normalCount);
-    auto uvBuffer = arenaAllocArray<vec2>(tempMemory, uvCount);
+    auto posBuffer = arenaAlloc<vec3>(tempMemory, posCount);
+    auto normalBuffer = arenaAlloc<vec3>(tempMemory, normalCount);
+    auto uvBuffer = arenaAlloc<vec2>(tempMemory, uvCount);
 
-    auto posIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
-    auto normalIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
-    auto uvIndicesBuffer = arenaAllocArray<u32>(tempMemory, verticesCount * 3);
+    auto posIndicesBuffer = arenaAlloc<u32>(tempMemory, verticesCount * 3);
+    auto normalIndicesBuffer = arenaAlloc<u32>(tempMemory, verticesCount * 3);
+    auto uvIndicesBuffer = arenaAlloc<u32>(tempMemory, verticesCount * 3);
 
     line = strtok((char*)data, "\n");
     for (size_t posIdx = 0, normalIdx = 0, uvIdx = 0, indexIdx = 0; line;)
@@ -364,7 +364,7 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 
     verticesCount *= 3;
 
-    auto vertices = arenaAllocArray<Vertex>(permanentMemory, verticesCount);
+    auto vertices = arenaAlloc<Vertex>(permanentMemory, verticesCount);
 
     for (size_t i = 0; i < verticesCount; ++i)
     {

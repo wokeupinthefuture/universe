@@ -1,8 +1,11 @@
 #include "gui.hpp"
 #include "common/log.hpp"
+
 #include "imgui/imgui.h"
-#include "imgui/backends/imgui_impl_win32.cpp"
-#include "imgui/backends/imgui_impl_dx11.cpp"
+#include "imgui/backends/imgui_impl_win32.h"
+#include "imgui/backends/imgui_impl_dx11.h"
+#include <Windows.h>
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 void guiInit(void** outWindowEventCallback, void* window, float dpi)
 {

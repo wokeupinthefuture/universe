@@ -85,10 +85,8 @@ static int resolveKeyMapping(KeyboardKey key)
 
         // Modifier keys
         case KeyboardKey::KEY_SHIFT: return VK_SHIFT;
-        case KeyboardKey::KEY_CONTROL_LEFT: return VK_LCONTROL;
-        case KeyboardKey::KEY_CONTROL_RIGHT: return VK_RCONTROL;
-        case KeyboardKey::KEY_ALT_LEFT: return VK_LMENU;
-        case KeyboardKey::KEY_ALT_RIGHT: return VK_RMENU;
+        case KeyboardKey::KEY_CTRL: return VK_CONTROL;
+        case KeyboardKey::KEY_ALT: return VK_MENU;
         case KeyboardKey::KEY_META_LEFT: return VK_LWIN;
         case KeyboardKey::KEY_META_RIGHT: return VK_RWIN;
         case KeyboardKey::KEY_CAPS_LOCK: return VK_CAPITAL;
@@ -193,10 +191,8 @@ static KeyboardKey translateKeyMapping(int vkKey)
 
         // Modifier keys
         case VK_SHIFT: return KeyboardKey::KEY_SHIFT;
-        case VK_LCONTROL: return KeyboardKey::KEY_CONTROL_LEFT;
-        case VK_RCONTROL: return KeyboardKey::KEY_CONTROL_RIGHT;
-        case VK_LMENU: return KeyboardKey::KEY_ALT_LEFT;
-        case VK_RMENU: return KeyboardKey::KEY_ALT_RIGHT;
+        case VK_CONTROL: return KeyboardKey::KEY_CTRL;
+        case VK_MENU: return KeyboardKey::KEY_ALT;
         case VK_LWIN: return KeyboardKey::KEY_META_LEFT;
         case VK_RWIN: return KeyboardKey::KEY_META_RIGHT;
         case VK_CAPITAL: return KeyboardKey::KEY_CAPS_LOCK;
@@ -347,7 +343,7 @@ Window openWindow(int width, int height, const char* name)
         0, name, name, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, hInst, nullptr);
 
     BOOL USE_DARK_MODE = true;
-    BOOL SET_IMMERSIVE_DARK_MODE_SUCCESS = SUCCEEDED(DwmSetWindowAttribute(hwnd, 20, &USE_DARK_MODE, sizeof(USE_DARK_MODE)));
+    DwmSetWindowAttribute(hwnd, 20, &USE_DARK_MODE, sizeof(USE_DARK_MODE));
 
     ShowWindow(hwnd, SW_SHOW);
 
@@ -439,9 +435,9 @@ void* loadDynamicFunc(void* lib, const char* funcName)
     return (void*)GetProcAddress((HMODULE)lib, funcName);
 }
 
-Asset loadAsset(const char* path, AssetType type, Arena& memory)
+Asset loadAsset(AssetID id, AssetType type, Arena& memory)
 {
-    const auto file = CreateFile(path,                    // file to open
+    const auto file = CreateFile(ASSETS_PATH[(i32)id],    // file to open
         GENERIC_READ,                                     // open for reading
         FILE_SHARE_READ,                                  // share for reading
         NULL,                                             // default security
@@ -461,7 +457,7 @@ Asset loadAsset(const char* path, AssetType type, Arena& memory)
 
     CloseHandle(file);
 
-    return Asset{.data = (u8*)buffer, .size = fileSize, .type = type};
+    return Asset{.data = (u8*)buffer, .size = fileSize, .type = type, .id = id};
 }
 
 }  // namespace Platform
