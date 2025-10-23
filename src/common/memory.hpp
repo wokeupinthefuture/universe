@@ -1,23 +1,21 @@
 #pragma once
 
 #include "common.hpp"
-#include "../platform.hpp"
+#include "common/log.hpp"
 
 struct Arena
 {
     u8* buffer;
     size_t size;
     size_t used;
+    size_t prevUsed;
 };
 
-inline void arenaInit(Arena& arena, size_t sizeBytes, void* startAddr = nullptr)
-{
-    arena.buffer = (u8*)Platform::allocMemory(sizeBytes, startAddr);
-    arena.size = sizeBytes;
-    arena.used = 0;
-}
+// calling platform to allocate and free, only compiled in main exe
+void arenaInit(Arena& arena, size_t sizeBytes, void* startAddr = nullptr);
+void arenaDeinit(Arena& arena);
 
-inline void* arenaAlloc(Arena& arena, size_t allocSize, size_t allocAlign = alignof(decltype(*Arena::buffer)))
+inline void* arenaAlloc(Arena& arena, size_t allocSize, size_t allocAlign)
 {
     const auto alignmentIsPowerOfTwo = !(allocAlign & (allocAlign - 1));
     assert(allocSize != 0);
@@ -25,13 +23,23 @@ inline void* arenaAlloc(Arena& arena, size_t allocSize, size_t allocAlign = alig
 
     const auto currentPtr = (uintptr_t)(arena.buffer + arena.used);
     const auto remainder = currentPtr & (allocAlign - 1);
-    const auto padding = (allocAlign - remainder) % allocAlign;
-
+    const auto padding = remainder ? (allocAlign - remainder) : 0;
     assert(arena.used + allocSize + padding <= arena.size);
 
     const auto ptr = arena.buffer + arena.used + padding;
+
+    logInfo("arena allocated %.3f mb / %.2f kb / %llu bytes (padding: %llu), from 0x%llx to 0x%llx",
+        std::round((float)allocSize / 1024 / 1024),
+        std::round((float)allocSize / 1024),
+        allocSize + padding,
+        padding,
+        ptr,
+        ptr + allocSize);
+
     memset(ptr, 0, allocSize);
+    arena.prevUsed = arena.used;
     arena.used += allocSize + padding;
+
     return ptr;
 }
 
@@ -47,17 +55,8 @@ inline T* arenaAlloc(Arena& arena)
     return (T*)arenaAlloc(arena, sizeof(T), alignof(T));
 }
 
-inline void arenaFreeAll(Arena& arena)
+inline void arenaClear(Arena& arena)
 {
     arena.used = 0;
-}
-
-inline void arenaDeinit(Arena& arena)
-{
-    if (arena.buffer && arena.size > 0)
-        Platform::freeMemory(arena.buffer, arena.size);
-
-    arena.buffer = nullptr;
-    arena.size = 0;
-    arena.used = 0;
+    arena.prevUsed = 0;
 }

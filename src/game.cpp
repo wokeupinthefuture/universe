@@ -1,11 +1,10 @@
 #include "game.hpp"
 
-#include "entity.hpp"
-#include "imgui.h"
-
+#include "context.hpp"
+#include "common/string.cpp"
+#include "platform.hpp"
 #include "common/math.cpp"
 #include "geometry.cpp"
-#include "input.hpp"
 #include "renderer.hpp"
 #include "shaders.cpp"
 #include "renderer_dx11.cpp"
@@ -13,10 +12,12 @@
 #include "entity.cpp"
 #include "input.cpp"
 
+#include "imgui.h"
+
 Entity defaultEntity()
 {
     Entity e{};
-    e.name = "entity";
+    e.name = strFromLiteral("entity");
     e.active = true;
     e.scale = vec3(1.f, 1.f, 1.f);
     e.isWorldMatrixDirty = true;
@@ -27,43 +28,50 @@ Entity defaultEntity()
 Entity* pushEntity()
 {
     auto entity = defaultEntity();
-    return arrayPush(getEntities(), entity);
+    return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* pushDrawable(RenderState& renderState, MeshType mesh, AssetID customMeshID = AssetID::Max)
+Entity* pushDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderType shader = ShaderType::Basic)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
-    entity.drawCommand = pushDrawCmdEx(renderState, mesh, customMeshID);
+    entity.drawCommand = pushDrawCmd(renderState, &renderState.generatedMeshes[(i32)meshType], shader);
+    if (entity.drawCommand->mesh)
+        entity.name = entity.drawCommand->mesh->name;
+    return arrayPush(g_context->entityManager.entities, entity);
+}
 
-    switch (mesh)
+Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType shader = ShaderType::Basic)
+{
+    auto entity = defaultEntity();
+    entity.type = EntityType::Drawable;
+
+    const auto mesh = findMeshByName(renderState.loadedMeshes, strFromNullTerm(meshName));
+    if (mesh == nullptr)
     {
-        default: LOGIC_ERROR();
-        case MeshType::Cube: entity.name = "cube"; break;
-        case MeshType::Grid: entity.name = "grid"; break;
-        case MeshType::Sphere: entity.name = "sphere"; break;
-        case MeshType::Triangle: entity.name = "triangle"; break;
-        case MeshType::Quad: entity.name = "quad"; break;
-        case MeshType::Custom:
-        {
-            switch (customMeshID)
-            {
-                default: LOGIC_ERROR();
-                case AssetID::ArrowMesh: entity.name = "arrow";
-            }
-        }
-        break;
+        logError("%s mesh not found", meshName);
+        ENSURE(false);
     }
+    entity.drawCommand = pushDrawCmd(renderState, mesh, shader);
+    entity.name = mesh->name;
 
-    return arrayPush(getEntities(), entity);
+    return arrayPush(g_context->entityManager.entities, entity);
 }
 
 Entity* pushLight(RenderState& renderState, LightType type)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Light | EntityType::Drawable;
-    entity.drawCommand = pushDrawCmd(renderState, MeshType::Sphere, ShaderType::Unlit);
-    entity.name = "light";
+
+    const auto mesh = findMeshByName(renderState.loadedMeshes, strFromLiteral("bulb"));
+    if (mesh == nullptr)
+    {
+        logError("bulb mesh not found");
+        ENSURE(false);
+    }
+    entity.drawCommand = pushDrawCmd(renderState, mesh, ShaderType::Unlit);
+
+    entity.name = strFromLiteral("light");
 
     setLightType(entity, type);
 
@@ -76,28 +84,28 @@ Entity* pushLight(RenderState& renderState, LightType type)
     }
 
     setColor(entity, vec4(1, 1, 1, 1));
-    setLocalScale(entity, vec3(0.1f));
+    setLocalScale(entity, vec3(0.5f));
 
-    return arrayPush(getEntities(), entity);
+    return arrayPush(g_context->entityManager.entities, entity);
 }
 
 void onResize(Context& ctx)
 {
-    calculateCameraProjection(ctx.entityManager.camera, ctx.render.screenSize, getEntities());
+    calculateCameraProjection(ctx.entityManager.camera, ctx.render.screenSize, ctx.entityManager.entities);
 }
 
 void gameInit(Context& ctx)
 {
     logInfo("game init");
-    setInternalPointer(ctx.input);
-    setInternalPointer(ctx.entityManager, ctx.tempMemory);
 
-    renderInitGeometry(ctx.render, ctx.platform.assets, ctx.gameMemory, ctx.tempMemory);
+    g_context = &ctx;
+
+    renderInitGeometry(ctx.render, ctx.platform.assets);
     renderInit(ctx.render, ctx.platform.window);
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
     auto camera = defaultEntity();
-    camera.name = "camera";
+    camera.name = strFromLiteral("camera");
     camera.type = EntityType::Camera;
     camera.defaultFov = 75.f;
     camera.nearZ = 0.001f;
@@ -108,10 +116,13 @@ void gameInit(Context& ctx)
 
     onResize(ctx);
 
-    ctx.gameState.grid = pushDrawable(ctx.render, MeshType::Grid);
-    ctx.gameState.sphere = pushDrawable(ctx.render, MeshType::Sphere);
+    ctx.gameState.grid = pushDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
+    ctx.gameState.grid->drawCommand->rasterizerState = RasterizerState::Wireframe;
+    ctx.gameState.grid->name = strFromLiteral("grid");
+
+    ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere);
     setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
-    ctx.gameState.cube = pushDrawable(ctx.render, MeshType::Cube);
+    ctx.gameState.cube = pushDrawable(ctx.render, GeneratedMesh::Cube);
     setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
     setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
     setColor(*ctx.gameState.sphere, vec4(0.2f, 1.f, 0.5f, 1.f));
@@ -122,14 +133,14 @@ void gameInit(Context& ctx)
     ctx.gameState.cameraController.sensitivity = 5.f;
 
     ctx.gameState.lightOrigin = pushEntity();
-    ctx.gameState.lightOrigin->name = "light origin";
+    ctx.gameState.lightOrigin->name = strFromLiteral("light origin");
     setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
     ctx.gameState.light = pushLight(ctx.render, LightType::Point);
     setParent(*ctx.gameState.light, ctx.gameState.lightOrigin, true);
 
     setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
 
-    ctx.gameState.arrow = pushDrawable(ctx.render, MeshType::Custom, AssetID::ArrowMesh);
+    ctx.gameState.arrow = pushDrawable(ctx.render, "arrow", ShaderType::Unlit);
     setColor(*ctx.gameState.arrow, vec4(0.5f, 0.5f, 0.5f, 1.f));
     setParent(*ctx.gameState.arrow, ctx.gameState.sphere);
     setLocalPosition(*ctx.gameState.arrow, vec3(0, 2, 0));
@@ -189,7 +200,7 @@ void cameraControllerMoveAndRotate(float dt, CameraController& controller)
 
 void cameraControllerUpdate(float dt, InputState& input, CameraController& controller)
 {
-    if (guiIsCapturingMouse() || guiIsCapturingKeyboard())
+    if (guiIsCapturingKeyboard() || guiIsCapturingMouse())
         return;
 
     const auto mouseDelta = vec3{-input.mouse.delta.y, -input.mouse.delta.x, 0};
@@ -220,7 +231,7 @@ static constexpr auto GUI_SLIDER_WIDTH = 50.f;
 void guiEntityContents(Context& ctx, Entity& entity)
 {
     ImGui::PushID(&entity);
-    ImGui::Text("%s", entity.name);
+    ImGui::Text("%s", entity.name.data);
 
     // transform
     if (entity.guiIsLocal)
@@ -283,7 +294,7 @@ void guiEntityContents(Context& ctx, Entity& entity)
         if (ImGui::DragFloat("fov", &fov))
         {
             entity.defaultFov = fov;
-            calculateCameraProjection(entity, ctx.render.screenSize, getEntities());
+            calculateCameraProjection(entity, ctx.render.screenSize, ctx.entityManager.entities);
         }
     }
 
@@ -314,6 +325,16 @@ void guiEntityContents(Context& ctx, Entity& entity)
         }
 
         auto color = entity.lightColor;
+        if (ImGui::ColorEdit4("color", &color.x))
+        {
+            setColor(entity, color);
+        }
+    }
+
+    if (hasType(entity, EntityType::Drawable))
+    {
+        ImGui::Text("shader: %s", (entity.drawCommand->shader == ShaderType::Basic) ? "basic" : "unlit");
+        auto color = entity.color;
         if (ImGui::ColorEdit4("color", &color.x))
         {
             setColor(entity, color);
@@ -386,7 +407,7 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 
     if (hasChildren)
     {
-        const auto open = ImGui::TreeNodeEx(entity.name, nodeFlags);
+        const auto open = ImGui::TreeNodeEx(entity.name.data, nodeFlags);
 
         guiEntityContextMenu(entity);
 
@@ -416,7 +437,7 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     {
         nodeFlags |= ImGuiTreeNodeFlags_Leaf;
         nodeFlags |= ImGuiTreeNodeFlags_NoTreePushOnOpen;
-        ImGui::TreeNodeEx(entity.name, nodeFlags);
+        ImGui::TreeNodeEx(entity.name.data, nodeFlags);
 
         guiEntityContextMenu(entity);
 
@@ -449,7 +470,7 @@ void onGui(Context& ctx)
         ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoHide, 40);
         ImGui::TableHeadersRow();
 
-        for (auto& entity : getEntities())
+        for (auto& entity : ctx.entityManager.entities)
         {
             if (entity.parent)
                 continue;
@@ -519,7 +540,7 @@ void gameUpdateAndRender(Context& ctx)
     for (const auto& command : ctx.render.drawCommands)
         renderDraw(command);
     guiDraw();
-    renderPresentAndResize();
+    renderPresent();
 
     for (auto& kb : ctx.input.keyboard)
     {

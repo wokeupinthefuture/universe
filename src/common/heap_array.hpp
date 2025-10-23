@@ -32,23 +32,29 @@ struct HeapArray
 };
 
 TRIVIAL_TEMPLATE_T(T)
-void arrayClear(HeapArray<T>& array)
+void arrayClear(HeapArray<T>& array, const char* name = "array")
 {
+    logInfo("CLEARING array %s at 0x%llx, clearing %llu bytes to 0x%llx",
+        name,
+        (uintptr_t)array.data,
+        MAX_HEAP_ARRAY_SIZE,
+        (uintptr_t)array.data + MAX_HEAP_ARRAY_SIZE);
     memset(array.data, 0, MAX_HEAP_ARRAY_SIZE);
     array.size = 0;
 }
 
 TRIVIAL_TEMPLATE_T(T)
-void arrayAlloc(HeapArray<T>& array, Arena& arena)
+void arrayInit(HeapArray<T>& array, Arena& arena, const char* name = "array")
 {
-    array.data = arenaAlloc<T>(arena, MAX_HEAP_ARRAY_SIZE / sizeof(T));
-    arrayClear(array);
+    array.data = (T*)arenaAlloc(arena, MAX_HEAP_ARRAY_SIZE, alignof(T));
+    array.size = 0;
+    logInfo("ARRAY_INIT: %s at 0x%llx", name, array.data);
 }
 
 TRIVIAL_TEMPLATE_T(T)
 T* arrayPush(HeapArray<T>& array, T value)
 {
-    ENSURE(array.size < (MAX_HEAP_ARRAY_SIZE / sizeof(T)));
+    assert(array.size < MAX_HEAP_ARRAY_SIZE / sizeof(T));
     array.data[array.size++] = value;
     return arrayLast(array);
 }
@@ -73,10 +79,4 @@ TRIVIAL_TEMPLATE_T(T)
 T* arrayLast(HeapArray<T> array)
 {
     return array.data + array.size - 1;
-}
-
-TRIVIAL_TEMPLATE_T(T)
-T* arrayGet(HeapArray<T> array, size_t idx)
-{
-    return &array.data[idx];
 }

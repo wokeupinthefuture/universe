@@ -18,13 +18,6 @@
 namespace Platform
 {
 
-static PlatformToGameBuffer* buffer;
-void setInternalPointer(PlatformToGameBuffer& _buffer, InputState& _input)
-{
-    buffer = &_buffer;
-    buffer->input = &_input;
-}
-
 static int resolveKeyMapping(KeyboardKey key)
 {
     switch (key)
@@ -239,30 +232,32 @@ static KeyboardKey translateKeyMapping(int vkKey)
 
 static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
-    if (buffer->guiWindowEventCallback)
-        if (((WNDPROC)buffer->guiWindowEventCallback)(hwnd, uMsg, wParam, lParam))
+    ENSURE(g_context);
+
+    if (g_context->platform.guiWindowEventCallback)
+        if (((WNDPROC)g_context->platform.guiWindowEventCallback)(hwnd, uMsg, wParam, lParam))
             return true;
 
     switch (uMsg)
     {
         case WM_RBUTTONDOWN:
         {
-            buffer->input->mouse.rightState = ButtonState::Pressed;
+            g_context->input.mouse.rightState = ButtonState::Pressed;
             break;
         }
         case WM_RBUTTONUP:
         {
-            buffer->input->mouse.rightState = ButtonState::Released;
+            g_context->input.mouse.rightState = ButtonState::Released;
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            buffer->input->mouse.leftState = ButtonState::Pressed;
+            g_context->input.mouse.leftState = ButtonState::Pressed;
             break;
         }
         case WM_LBUTTONUP:
         {
-            buffer->input->mouse.leftState = ButtonState::Released;
+            g_context->input.mouse.leftState = ButtonState::Released;
             break;
         }
         case WM_SYSKEYDOWN:
@@ -277,13 +272,13 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             if (isDown)
             {
                 if (wasDown != isDown)
-                    buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
+                    g_context->input.keyboard[translateKeyMapping(key)] = ButtonState::Pressed;
                 else
-                    buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Holding;
+                    g_context->input.keyboard[translateKeyMapping(key)] = ButtonState::Holding;
             }
             else
             {
-                buffer->input->keyboard[translateKeyMapping(key)] = ButtonState::Released;
+                g_context->input.keyboard[translateKeyMapping(key)] = ButtonState::Released;
             }
             break;
         }
@@ -292,8 +287,8 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             // if (!inputState.mouse.isCaptured)
             // SetCapture(hwnd);
             vec2 mousePos = {(float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam)};
-            buffer->input->mouse.delta = buffer->input->mouse.pos - mousePos;
-            buffer->input->mouse.pos = mousePos;
+            g_context->input.mouse.delta = g_context->input.mouse.pos - mousePos;
+            g_context->input.mouse.pos = mousePos;
             break;
         }
         case WM_KILLFOCUS:
@@ -306,14 +301,14 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case WM_CLOSE:
         {
             PostQuitMessage(0);
-            buffer->windowShouldClose = true;
+            g_context->platform.windowShouldClose = true;
             break;
         }
         case WM_SIZE:
         {
             RECT rect;
             GetClientRect(hwnd, &rect);
-            buffer->screenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
+            g_context->platform.lastScreenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
             break;
         }
 
@@ -435,9 +430,9 @@ void* loadDynamicFunc(void* lib, const char* funcName)
     return (void*)GetProcAddress((HMODULE)lib, funcName);
 }
 
-Asset loadAsset(AssetID id, AssetType type, Arena& memory)
+Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena& tempMemory)
 {
-    const auto file = CreateFile(ASSETS_PATH[(i32)id],    // file to open
+    const auto file = CreateFile(path,                    // file to open
         GENERIC_READ,                                     // open for reading
         FILE_SHARE_READ,                                  // share for reading
         NULL,                                             // default security
@@ -449,7 +444,7 @@ Asset loadAsset(AssetID id, AssetType type, Arena& memory)
 
     DWORD fileSize = GetFileSize(file, nullptr);
 
-    auto buffer = arenaAlloc(memory, fileSize, sizeof(u8));
+    auto buffer = arenaAlloc(permanentMemory, fileSize, alignof(u8));
 
     DWORD bytesRead{};
     const auto readResult = ReadFile(file, buffer, fileSize, &bytesRead, nullptr);
@@ -457,7 +452,47 @@ Asset loadAsset(AssetID id, AssetType type, Arena& memory)
 
     CloseHandle(file);
 
-    return Asset{.data = (u8*)buffer, .size = fileSize, .type = type, .id = id};
+    const auto sPath = strClone(path, tempMemory);
+
+    const auto nameWithExt = strFindReverse(sPath, strFromLiteral("\\"), false, 1);
+    ENSURE(nameWithExt);
+    const auto ext = strFind(nameWithExt, strFromLiteral("."), false);
+    ENSURE(ext);
+
+    String name;
+    name.data = nameWithExt.data;
+    name.length = nameWithExt.length - ext.length;
+
+    return Asset{
+        .data = (u8*)buffer,
+        .name = strClone(name, permanentMemory),
+        .size = fileSize,
+        .type = type,
+    };
+}
+
+void forEachFileInDirectory(const char* directory, void (*callback)(const char*))
+{
+    const auto isValidFile = [](WIN32_FIND_DATA& ffd)
+    {
+        return !(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || strcmp(ffd.cFileName, ".") == 0 ||
+                 strcmp(ffd.cFileName, "..") == 0);
+    };
+
+    char directoryWildcard[256]{};
+    sprintf(directoryWildcard, "%s\\*", directory);
+
+    WIN32_FIND_DATA ffd{};
+    const auto file = FindFirstFile(directoryWildcard, &ffd);
+    ENSURE(file != INVALID_HANDLE_VALUE);
+
+    if (isValidFile(ffd))
+        callback(ffd.cFileName);
+    do
+    {
+        if (isValidFile(ffd))
+            callback(ffd.cFileName);
+    } while (FindNextFile(file, &ffd) != 0);
 }
 
 }  // namespace Platform

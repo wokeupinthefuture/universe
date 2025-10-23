@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/heap_array.hpp"
 
 #define PLATFORM_WIN32 0
 #define PLATFORM_TYPE PLATFORM_WIN32
@@ -41,15 +42,7 @@
     } while (0)
 #endif
 
-static constexpr size_t MAX_ASSETS = 10;
-
-enum class AssetID
-{
-    ArrowMesh,
-    Max
-};
-
-static constexpr const char* ASSETS_PATH[] = {"resources/models/arrow.obj"};
+static constexpr const char* ASSETS_PATH = "resources/models/";
 
 enum class AssetType
 {
@@ -60,21 +53,19 @@ enum class AssetType
 struct Asset
 {
     const u8* data;
+    String name;
     size_t size;
     AssetType type;
-    AssetID id;
 };
 
 struct PlatformToGameBuffer
 {
     void* window;
     bool windowShouldClose;
-    struct InputState* input;
     float dpi;
     vec2 lastScreenSize;
-    vec2 screenSize;
     void* guiWindowEventCallback;
-    Asset assets[MAX_ASSETS];
+    HeapArray<Asset> assets;
 };
 
 namespace Platform
@@ -93,6 +84,8 @@ void getExeDirectory(char* path);
 u64 getFileLastWrittenTime(const char* fileName);
 void copyFile(const char* src, const char* dst);
 
+void forEachFileInDirectory(const char* directory, void (*callback)(const char*));
+
 float getDpi();
 
 void* loadDynamicLib(const char* dllName);
@@ -100,8 +93,6 @@ void unloadDynamicLib(void* lib);
 void* loadDynamicFunc(void* dll, const char* funcName);
 #define Platform_loadDynamicFunc(lib, funcName) decltype (&funcName)(Platform::loadDynamicFunc((lib), (#funcName)))
 
-Asset loadAsset(const char* path, AssetType type, Arena& memory);
-
-void setInternalPointer(PlatformToGameBuffer& buffer, InputState& input);
+Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena& tempMemory);
 
 }  // namespace Platform

@@ -39,15 +39,10 @@ using u64 = std::uint64_t;
 #define Megabytes(count) (Kilobytes(count) * 1024)
 #define Gigabytes(count) (Megabytes(count) * 1024)
 
-#define setBit(number, bit) (number) | (1 << bit)
-#define clearBit(number, bit) (number) & ~(1 << bit)
-#define checkBit(number, bit) ((number) >> bit) & 1
-
-template <typename T>
-void memset(T& memory, int value)
-{
-    std::memset((void*)&memory, value, sizeof(T));
-}
+#define BIT(bit) 1 << bit
+#define setBit(number, bit) ((i32)number) | (1 << (i32)bit)
+#define clearBit(number, bit) ((i32)number) & ~(1 << (i32)bit)
+#define checkBit(number, bit) ((i32)(number) >> (i32)bit) & 1
 
 #define ARR_LENGTH(arr) sizeof(arr) / sizeof(arr[0])
 

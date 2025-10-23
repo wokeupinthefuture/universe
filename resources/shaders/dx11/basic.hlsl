@@ -26,7 +26,7 @@ float4 PS_Main(PSInput input) : SV_TARGET
         attenuation = 1.0f / (1.0f + 0.09f * distance + 0.032f * distance * distance);
     }   
 
-    float diffuseFactor = max(dot(normal, normalize(lightVec)), 0.0);
+    float diffuseFactor = max(dot(float3(1, 0, 0), normalize(lightVec)), 0.0);
     float4 diffuseColor = lightColor * diffuseFactor; 
 
     float4 ambientColor = objectColor * 0.1;

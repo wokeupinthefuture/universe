@@ -1,7 +1,10 @@
 #include "context.hpp"
-#include "entity.hpp"
+#include "platform.hpp"
+#include "context.cpp"
 #include "game.hpp"
 
+#include "common/string.cpp"
+#include "common/memory.cpp"
 #include "platform_win32.cpp"
 
 #include <chrono>
@@ -64,9 +67,10 @@ void unloadGameCode(GameCode& game)
 int main()
 {
     Context context{};
-    contextInit(context, Megabytes(100), Megabytes(4));
+    contextInit(context, Megabytes(100), Megabytes(25));
     defer({ contextDeinit(context); });
-    Platform::setInternalPointer(context.platform, context.input);
+
+    g_context = &context;
 
     char directory[256]{};
     Platform::getExeDirectory(directory);
@@ -74,14 +78,20 @@ int main()
     sprintf(gameCodeTempPath, "%s%s", directory, GAME_DLL_NAME_TEMP);
 
     static constexpr vec2 INITIAL_WINDOW_SIZE = vec2(1280, 720);
-    context.render.screenSize = INITIAL_WINDOW_SIZE;
-    context.platform.screenSize = INITIAL_WINDOW_SIZE;
+    context.platform.lastScreenSize = INITIAL_WINDOW_SIZE;
     context.platform.window = Platform::openWindow(INITIAL_WINDOW_SIZE.x, INITIAL_WINDOW_SIZE.y, PROJECT_NAME);
     context.platform.dpi = Platform::getDpi();
+    context.render.screenSize = INITIAL_WINDOW_SIZE;
     defer({ Platform::closeWindow(context.platform.window); });
 
-    context.platform.assets[(i32)AssetID::ArrowMesh] =
-        Platform::loadAsset(AssetID::ArrowMesh, AssetType::ObjMesh, context.platformMemory);
+    Platform::forEachFileInDirectory(ASSETS_PATH,
+        [](const char* fileName)
+        {
+            char filePath[256]{};
+            sprintf(filePath, "%s\\%s", ASSETS_PATH, fileName);
+            arrayPush(g_context->platform.assets,
+                Platform::loadAsset(filePath, AssetType::ObjMesh, g_context->platformMemory, g_context->tempMemory));
+        });
 
     auto game = loadGameCode();
 
@@ -91,13 +101,12 @@ int main()
     {
         Platform::pollEvents();
 
-        if ((i32)context.platform.lastScreenSize.x != (i32)context.platform.screenSize.x ||
-            (i32)context.platform.lastScreenSize.y != (i32)context.platform.screenSize.y)
+        if (context.platform.lastScreenSize.x != 0 || context.platform.lastScreenSize.y != 0)
         {
-            context.render.screenSize = context.platform.screenSize;
+            context.render.screenSize = context.platform.lastScreenSize;
             context.render.needsToResize = true;
+            context.platform.lastScreenSize = {};
         }
-        context.platform.lastScreenSize = context.platform.screenSize;
 
         const auto gameLastWrittenTime = Platform::getFileLastWrittenTime(gameCodeRealPath);
         if (gameLastWrittenTime != game.lastWrittenTime || context.wantsToReload)
@@ -106,9 +115,8 @@ int main()
 
             std::this_thread::sleep_for(1ms);
 
+            contextHotReload(context);
             unloadGameCode(game);
-
-            contextClear(context);
 
             std::this_thread::sleep_for(1ms);
 
@@ -120,7 +128,7 @@ int main()
 
         game.updateAndRender(context);
 
-        arenaFreeAll(context.tempMemory);
+        arenaClear(context.tempMemory);
     }
 
     game.exit(context);

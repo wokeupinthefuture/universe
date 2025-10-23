@@ -2,9 +2,70 @@
 #include "common/utils.hpp"
 #include "platform.hpp"
 #include "common/memory.hpp"
+#include <type_traits>
 
-static Mesh generateSphere(
-    float radius, u32 stacks, u32 slices, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
+constexpr MeshFlags operator|(MeshFlags lhs, MeshFlags rhs)
+{
+    return static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) | static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+}
+
+constexpr MeshFlags& operator|=(MeshFlags& lhs, MeshFlags rhs)
+{
+    lhs = static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) | static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+    return lhs;
+}
+
+constexpr MeshFlags operator&(MeshFlags lhs, MeshFlags rhs)
+{
+    return static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) & static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+}
+
+constexpr MeshFlags& operator&=(MeshFlags& lhs, MeshFlags rhs)
+{
+    lhs = static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) & static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+    return lhs;
+}
+
+constexpr MeshFlags operator^(MeshFlags lhs, MeshFlags rhs)
+{
+    return static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) ^ static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+}
+
+constexpr MeshFlags& operator^=(MeshFlags& lhs, MeshFlags rhs)
+{
+    lhs = static_cast<MeshFlags>(
+        static_cast<std::underlying_type_t<MeshFlags>>(lhs) ^ static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+    return lhs;
+}
+
+constexpr MeshFlags operator~(MeshFlags rhs)
+{
+    return static_cast<MeshFlags>(~static_cast<std::underlying_type_t<MeshFlags>>(rhs));
+}
+
+static vec3 computeFaceNormal(vec3 v1, vec3 v2, vec3 v3)
+{
+    // const auto edge1 = (v2 - v1) * vec3(-1, -1, -1);
+    // const auto edge2 = (v3 - v1) * vec3(-1, -1, -1);
+    const auto edge1 = (v2 - v1);
+    const auto edge2 = (v3 - v1);
+    const auto crossProd = cross(edge1, edge2);
+    return length(crossProd) > 0 ? normalize(crossProd) : crossProd;
+}
+
+static Mesh generateSphere(float radius,
+    u32 stacks,
+    u32 slices,
+    Vertex* outVertices,
+    size_t verticesCount,
+    u32* outIndices,
+    size_t indicesCount,
+    Arena& tempMemory)
 {
     Mesh mesh{};
 
@@ -12,7 +73,8 @@ static Mesh generateSphere(
     mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
     mesh.indicesCount = indicesCount;
-    mesh.isIndexed = true;
+    mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+    mesh.id = (size_t)GeneratedMesh::Sphere;
 
     size_t vertexCount = 0;
     // Generate vertices
@@ -58,6 +120,22 @@ static Mesh generateSphere(
         }
     }
 
+    auto faceNormals = arenaAlloc<vec3>(tempMemory, verticesCount * 3);
+
+    for (size_t i = 0; i < verticesCount; ++i)
+    {
+        const auto faceNormal = computeFaceNormal(outVertices[i + 0].pos, outVertices[i + 1].pos, outVertices[i + 2].pos);
+        faceNormals[i] = faceNormal;
+        outVertices[i + 0].normal += faceNormal;
+        outVertices[i + 1].normal += faceNormal;
+        outVertices[i + 2].normal += faceNormal;
+    }
+
+    for (size_t i = 0; i < verticesCount; ++i)
+    {
+        outVertices[i].normal = normalize(outVertices[i].normal);
+    }
+
     return mesh;
 }
 
@@ -70,7 +148,8 @@ static Mesh generateGrid(
     mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
     mesh.indicesCount = indicesCount;
-    mesh.isIndexed = true;
+    mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+    mesh.id = (size_t)GeneratedMesh::Grid;
 
     i32 vertexCount = 0;
     for (int z = 0; z <= gridY; z++)
@@ -100,13 +179,13 @@ static Mesh generateGrid(
     return mesh;
 }
 
-Mesh generateMesh(MeshType type)
+Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
 {
     Mesh mesh{};
 
     switch (type)
     {
-        case MeshType::Triangle:
+        case GeneratedMesh::Triangle:
         {
             static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
                 {.pos = vec3{0.0f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
@@ -117,11 +196,12 @@ Mesh generateMesh(MeshType type)
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.isIndexed = true;
+            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.id = (size_t)GeneratedMesh::Triangle;
 
             break;
         }
-        case MeshType::Quad:
+        case GeneratedMesh::Quad:
         {
             static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
                 {.pos = vec3{-0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
@@ -133,11 +213,12 @@ Mesh generateMesh(MeshType type)
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.isIndexed = true;
+            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.id = (size_t)GeneratedMesh::Quad;
 
             break;
         }
-        case MeshType::Cube:
+        case GeneratedMesh::Cube:
         {
             static Vertex VERTICES[] = {// Front face (z = 0.5)
                 {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
@@ -214,11 +295,12 @@ Mesh generateMesh(MeshType type)
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.isIndexed = true;
+            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.id = (size_t)GeneratedMesh::Cube;
 
             break;
         }
-        case MeshType::Sphere:
+        case GeneratedMesh::Sphere:
         {
             static constexpr auto SPHERE_STACKS = 16;
             static constexpr auto SPHERE_SLICES = 16;
@@ -227,12 +309,18 @@ Mesh generateMesh(MeshType type)
             static Vertex VERTICES[(SPHERE_STACKS + 1) * (SPHERE_SLICES + 1)] = {};
             static u32 INDICES[(SPHERE_STACKS + 1) * (SPHERE_SLICES + 1) * 6] = {};
 
-            mesh = generateSphere(
-                SPHERE_RADIUS, SPHERE_STACKS, SPHERE_SLICES, VERTICES, ARR_LENGTH(VERTICES), INDICES, ARR_LENGTH(INDICES));
+            mesh = generateSphere(SPHERE_RADIUS,
+                SPHERE_STACKS,
+                SPHERE_SLICES,
+                VERTICES,
+                ARR_LENGTH(VERTICES),
+                INDICES,
+                ARR_LENGTH(INDICES),
+                tempMemory);
 
             break;
         }
-        case MeshType::Grid:
+        case GeneratedMesh::Grid:
         {
             static constexpr auto GRID_X = 100;
             static constexpr auto GRID_Y = 100;
@@ -248,7 +336,7 @@ Mesh generateMesh(MeshType type)
         default: LOGIC_ERROR();
     }
 
-    mesh.type = type;
+    mesh.name = MeshTypeName[mesh.id];
 
     return mesh;
 }
@@ -257,7 +345,7 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 {
     ENSURE(asset.type == AssetType::ObjMesh);
 
-    auto data = arenaAlloc(tempMemory, asset.size);
+    auto data = arenaAlloc(tempMemory, asset.size, alignof(u8));
     memcpy(data, asset.data, asset.size);
 
     size_t posCount = 0;
@@ -332,8 +420,9 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
         }
         else if (isIndexLine)
         {
+            bool withoutUV = false;
             u32 posIndices[3]{}, normalIndices[3]{}, uvIndices[3]{};
-            const auto matches = sscanf(line + 2,
+            auto matches = sscanf(line + 2,
                 "%u/%u/%u %u/%u/%u %u/%u/%u",
                 &posIndices[0],
                 &normalIndices[0],
@@ -344,7 +433,22 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
                 &posIndices[2],
                 &normalIndices[2],
                 &uvIndices[2]);
-            ENSURE(matches == 9);
+            if (matches != 9)
+            {
+                withoutUV = true;
+                // check export without uv
+                matches = sscanf(line + 2,
+                    "%u//%u %u//%u %u//%u",
+                    &posIndices[0],
+                    &normalIndices[0],
+                    &posIndices[1],
+                    &normalIndices[1],
+                    &posIndices[2],
+                    &normalIndices[2]);
+                ENSURE(matches == 6);
+            }
+            if (!withoutUV)
+                ENSURE(matches == 9);
 
             posIndicesBuffer[indexIdx * 3 + 0] = posIndices[0];
             posIndicesBuffer[indexIdx * 3 + 1] = posIndices[1];
@@ -375,12 +479,13 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
         // vertices[i].uv = uvIndicesBuffer[uvIndicesBuffer[i - 1]];
     }
 
+    logInfo("loaded \'%s\' mesh asset, vertices: %i", asset.name.data, verticesCount);
+
     Mesh mesh{};
 
     mesh.vertices = vertices;
     mesh.verticesCount = verticesCount;
-    mesh.isIndexed = false;
-    mesh.type = MeshType::Custom;
+    mesh.name = asset.name;
 
     return mesh;
 }

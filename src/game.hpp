@@ -1,6 +1,5 @@
 #pragma once
 
-#include "platform.hpp"
 #include "context.hpp"
 
 extern "C"

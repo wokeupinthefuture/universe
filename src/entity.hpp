@@ -2,7 +2,8 @@
 
 #include "common/common.hpp"
 #include "common/heap_array.hpp"
-#include "input.hpp"
+
+struct DrawCommand;
 
 static constexpr auto MAX_ENTITY_CHILDREN = 5;
 
@@ -22,7 +23,7 @@ enum class LightType
 
 struct Entity
 {
-    const char* name;
+    String name;
     Entity* parent;
     Entity* children[MAX_ENTITY_CHILDREN];
     bool active;
@@ -52,6 +53,7 @@ struct Entity
 
     // drawable
     struct DrawCommand* drawCommand;
+    vec4 color;
 
     // light
     vec3 lightDirection;
@@ -68,8 +70,6 @@ struct EntityManager
 };
 
 void setInternalPointer(EntityManager& manager, Arena& tempMemory);
-
-HeapArray<Entity>& getEntities();
 
 void updateTransform(Entity& entity);
 

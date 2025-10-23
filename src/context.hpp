@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common/memory.hpp"
-#include "common/heap_array.hpp"
 #include "platform.hpp"
 #include "renderer.hpp"
 #include "entity.hpp"
@@ -42,44 +41,21 @@ struct Context
     bool wantsToQuit;
     bool wantsToReload;
 
-    Arena platformMemory;
-    Arena gameMemory;
-    Arena tempMemory;
+    Arena platformMemory;  // lives the entire app
+    Arena gameMemory;      // lives the entire app, cleared on hot-reload
+    Arena tempMemory;      // lives for the duration of a frame
 
     PlatformToGameBuffer platform;
     InputState input;
     RenderState render;
     EntityManager entityManager;
-    GameState gameState;
     GuiState gui;
+
+    GameState gameState;
 };
 
-inline void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
-{
-    context.timeScale = 1.f;
-    context.dt = 0.016f;
-    context.render.needsToResize = true;
+inline Context* g_context;
 
-    arenaInit(context.platformMemory, memorySize);
-    arenaInit(context.gameMemory, memorySize);
-    arenaInit(context.tempMemory, tempMemorySize);
-
-    arrayAlloc(context.render.drawCommands, context.gameMemory);
-    arrayAlloc(context.entityManager.entities, context.gameMemory);
-}
-
-inline void contextClear(Context& context)
-{
-    arrayClear(context.entityManager.entities);
-    arrayClear(context.render.drawCommands);
-
-    arenaFreeAll(context.gameMemory);
-    arenaFreeAll(context.tempMemory);
-}
-
-inline void contextDeinit(Context& context)
-{
-    arenaDeinit(context.gameMemory);
-    arenaDeinit(context.tempMemory);
-    arenaDeinit(context.platformMemory);
-}
+void contextInit(Context& context, size_t memorySize, size_t tempMemorySize);
+void contextHotReload(Context& context);
+void contextDeinit(Context& context);

@@ -20,57 +20,34 @@ struct DrawCommand
     ShaderVariable variables[MAX_SHADER_VARIABLES];
 };
 
-static constexpr auto MAX_DRAW_COMMANDS = 10;
-static constexpr auto MAX_LOADED_MESHES = 10;
-
 struct RenderState
 {
     bool needsToResize;
     vec2 screenSize;
     HeapArray<DrawCommand> drawCommands;
-    Mesh generatedMeshes[(i32)MeshType::Max];
-    Mesh loadedMeshes[MAX_LOADED_MESHES];
+    Mesh generatedMeshes[(i32)GeneratedMesh::Max];
+    HeapArray<Mesh> loadedMeshes;
 };
 
-void renderInitGeometry(RenderState& state, const Asset* assets, Arena& permanentMemory, Arena& tempMemory);
+inline Mesh* findMeshByName(HeapArray<Mesh> const& meshes, String name)
+{
+    return find(meshes.data, meshes.size, [name](Mesh& mesh) { return mesh.name == name; });
+}
+
+void renderInitGeometry(RenderState& state, HeapArray<Asset> const& assets);
 void renderInit(RenderState& state, void* window);
 void renderDeinit();
 
 void createShaderVariables(DrawCommand& command);
 
-inline DrawCommand* pushDrawCmdEx(
-    RenderState& state, MeshType meshType, AssetID customMeshID = AssetID::Max, ShaderType shader = ShaderType::Basic)
+inline DrawCommand* pushDrawCmd(RenderState& state, Mesh* mesh, ShaderType shader = ShaderType::Basic)
 {
     DrawCommand cmd = {};
-
     cmd.rasterizerState = RasterizerState::Default;
     cmd.shader = shader;
-
-    if (meshType == MeshType::Custom)
-    {
-        ENSURE(customMeshID != AssetID::Max);
-        cmd.mesh = &state.loadedMeshes[(i32)customMeshID];
-        cmd.shader = ShaderType::Unlit;
-    }
-    else
-    {
-        cmd.mesh = &state.generatedMeshes[(i32)meshType];
-    }
-
-    if (meshType == MeshType::Grid)
-    {
-        cmd.rasterizerState = RasterizerState::Wireframe;
-        cmd.shader = ShaderType::Unlit;
-    }
-
+    cmd.mesh = mesh;
     createShaderVariables(cmd);
-
     return arrayPush(state.drawCommands, cmd);
-}
-
-inline DrawCommand* pushDrawCmd(RenderState& state, MeshType meshType, ShaderType shader = ShaderType::Basic)
-{
-    return pushDrawCmdEx(state, meshType, AssetID::Max, shader);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color);

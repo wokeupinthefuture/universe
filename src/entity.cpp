@@ -1,20 +1,5 @@
 #include "entity.hpp"
-#include "common/math.hpp"
-#include "renderer.hpp"
-
-static EntityManager* manager;
-static Arena* tempMemory;
-void setInternalPointer(EntityManager& _manager, Arena& _tempMemory)
-{
-    manager = &_manager;
-    tempMemory = &_tempMemory;
-}
-
-HeapArray<Entity>& getEntities()
-{
-    ENSURE(manager);
-    return manager->entities;
-}
+#include "context.hpp"
 
 static mat4 calculateWorldTransform(Entity& entity)
 {
@@ -90,14 +75,14 @@ void updateTransform(Entity& entity)
 {
     calculateWorldTransform(entity);
 
-    ENSURE(manager != nullptr);
+    ENSURE(g_context != nullptr);
     if (hasType(entity, EntityType::Camera))
     {
-        calculateCameraTransform(entity, manager->entities);
+        calculateCameraTransform(entity, g_context->entityManager.entities);
     }
     else if (hasType(entity, EntityType::Drawable))
     {
-        updateShaderMVP(entity, manager->camera);
+        updateShaderMVP(entity, g_context->entityManager.camera);
     }
 
     if (hasType(entity, EntityType::Light))
@@ -105,7 +90,7 @@ void updateTransform(Entity& entity)
         if (entity.lightType == LightType::Directional)
             return;
 
-        for (const auto& drawable : manager->entities)
+        for (const auto& drawable : g_context->entityManager.entities)
         {
             if (hasType(drawable, EntityType::Drawable))
             {
@@ -302,12 +287,14 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
 
 void setColor(Entity& entity, vec4 color)
 {
+    ENSURE(g_context);
+    entity.color = color;
     setShaderVariableVec4(*entity.drawCommand, "objectColor", color);
 
     if (hasType(entity, EntityType::Light))
     {
         entity.lightColor = color;
-        for (auto& other : getEntities())
+        for (auto& other : g_context->entityManager.entities)
         {
             if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
                 setShaderVariableVec4(*other.drawCommand, "lightColor", color);
@@ -317,11 +304,12 @@ void setColor(Entity& entity, vec4 color)
 
 void setLightType(Entity& light, LightType type)
 {
+    ENSURE(g_context);
     ENSURE(hasType(light, EntityType::Light));
 
     light.lightType = type;
 
-    for (auto& other : getEntities())
+    for (auto& other : g_context->entityManager.entities)
     {
         if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
             setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
@@ -330,11 +318,12 @@ void setLightType(Entity& light, LightType type)
 
 void setLightDirection(Entity& light, vec3 direction)
 {
+    ENSURE(g_context);
     ENSURE(hasType(light, EntityType::Light));
 
     light.lightDirection = direction;
 
-    for (const auto& entity : getEntities())
+    for (const auto& entity : g_context->entityManager.entities)
     {
         if (hasType(entity, EntityType::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
         {

@@ -143,7 +143,7 @@ float remap(float source, float sourceFrom, float sourceTo, float targetFrom, fl
 
 const char* vec3ToString(Arena& arena, vec3 v)
 {
-    auto string = (char*)arenaAlloc(arena, 256 * sizeof(char), sizeof(char*));
+    auto string = arenaAlloc<char>(arena, 256);
     sprintf(string, "%f, %f, %f", v.x, v.y, v.z);
     return string;
 }

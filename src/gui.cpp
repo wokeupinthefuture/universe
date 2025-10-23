@@ -23,7 +23,7 @@ void guiInit(void** outWindowEventCallback, void* window, float dpi)
     style.FontScaleDpi = dpi;  // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We
 
     ImGui_ImplWin32_Init(window);
-    ImGui_ImplDX11_Init(device.Get(), deviceContext.Get());
+    ImGui_ImplDX11_Init(s_device.Get(), s_deviceContext.Get());
 
     *outWindowEventCallback = (void*)ImGui_ImplWin32_WndProcHandler;
 }

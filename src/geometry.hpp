@@ -1,6 +1,5 @@
 #pragma once
 
-#include "common/common.hpp"
 #include "platform.hpp"
 
 struct Vertex
@@ -9,16 +8,37 @@ struct Vertex
     vec3 normal;
 };
 
-enum class MeshType
+static constexpr String MeshTypeName[] = {strFromLiteral("Triangle"),
+    strFromLiteral("Quad"),
+    strFromLiteral("Cube"),
+    strFromLiteral("Sphere"),
+    strFromLiteral("Grid"),
+    strFromLiteral("Custom"),
+    strFromLiteral("Max")};
+
+enum class GeneratedMesh
 {
     Triangle,
     Quad,
     Cube,
     Sphere,
     Grid,
-    Custom,
     Max
 };
+
+enum class MeshFlags
+{
+    Indexed = BIT(0),
+    Generated = BIT(1),
+};
+
+constexpr MeshFlags operator|(MeshFlags lhs, MeshFlags rhs);
+constexpr MeshFlags& operator|=(MeshFlags& lhs, MeshFlags rhs);
+constexpr MeshFlags operator&(MeshFlags lhs, MeshFlags rhs);
+constexpr MeshFlags& operator&=(MeshFlags& lhs, MeshFlags rhs);
+constexpr MeshFlags operator^(MeshFlags lhs, MeshFlags rhs);
+constexpr MeshFlags& operator^=(MeshFlags& lhs, MeshFlags rhs);
+constexpr MeshFlags operator~(MeshFlags rhs);
 
 struct Mesh
 {
@@ -26,10 +46,10 @@ struct Mesh
     size_t verticesCount;
     u32* indices;
     size_t indicesCount;
-    MeshType type;
-    AssetID customMeshID;
-    bool isIndexed;
+    MeshFlags flags;
+    size_t id;
+    String name;
 };
 
-Mesh generateMesh(MeshType type);
+Mesh generateMesh(GeneratedMesh type, Arena& tempMemory);
 Mesh loadMesh(struct Asset const& asset, Arena& permanentMemory, Arena& tempMemory);
