@@ -26,26 +26,35 @@
     box-sizing: border-box;
   }
   .bar {
-    display:flex; align-items:center; gap:0;
-    height: 32px; /* target thin height */
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 32px;
     line-height: 32px;
     font-size: 13px;
     color: var(--text);
+    width: 100%;
+    margin: 0;
+    background: none;
+    justify-content: flex-start;
   }
   .cell {
-    display:flex; align-items:center; gap:8px;
+    display: flex; align-items: center; justify-content: flex-start; gap: 8px;
     padding: 0 10px;
     height: 100%;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     background: transparent;
-    border-right: 1px solid #2e3035; /* subtle separator (ImGui child border tone) */
-    min-width: 180px; /* readable slice */
+    border-right: 1px solid #2e3035;
+    min-width: 200px;
+    max-width: 320px;
     box-sizing: border-box;
+    text-align: left;
   }
-  .cell:last-child { border-right: none; }
+  .cell:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .cell:last-child { border-right: none; padding-right: 0; border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 
-  .label { color:#c7c7c7; opacity:.85; font-weight:700; font-size:12px; }
-  .val { color: var(--text-normal); }
+  .label { color: #c7c7c7; opacity: .85; font-weight: 700; font-size: 12px; }
+  .val { color: var(--text-normal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; display: inline-block; text-align: left; }
 
   /* states consistent with main widget */
   .completed .val { color: var(--text-muted); text-decoration: line-through; }

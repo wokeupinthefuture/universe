@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include "heap_array.hpp"
 
 struct String
 {
@@ -42,11 +43,17 @@ inline bool operator==(String& str, const char* otherStr)
 }
 
 struct Arena;
-String strFind(String needle, String haystack, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
-String strFindReverse(String needle, String haystack, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
+String strFind(String haystack, String needle, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
+String strFindNot(String haystack, String needle, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
+String strFindReverse(String haystack, String needle, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
+String strFindNotReverse(String haystack, String needle, bool returnOnlyOccurence = true, ptrdiff_t resultOffset = 0);
 String strClone(const char* other, Arena& memory);
 String strClone(String const& other, Arena& memory);
+String strCopy(String const& src, String& dst);
+String strCopy(String const& src, char* dst, size_t dstLength);
 String strAppend(String const& s1, String const& s2, Arena& memory);
+String strFindUntil(String src, String substr, bool inclusive = true);
+HeapArray<String> strSplit(String src, String delim, Arena& memory, bool delimInclusive = false);
 
 #define strFromNullTerm(str)                      \
     String                                        \
@@ -54,3 +61,6 @@ String strAppend(String const& s1, String const& s2, Arena& memory);
         .data = (char*)str, .length = strlen(str) \
     }
 #define strFromLiteral(str) String{.data = (char*)str, .length = sizeof(str) - 1}
+
+static constexpr auto STR_WHITESPACE = strFromLiteral(" ");
+static constexpr auto STR_NEWL = strFromLiteral("\n");

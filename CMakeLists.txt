@@ -8,7 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(binary_dir "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${binary_dir})
 
-
 set(PLATFORM_EXECUTABLE ${PROJECT_NAME})
 set(GAME_DLL game_${PROJECT_NAME})
 
@@ -21,7 +20,12 @@ foreach (element ${SOURCES})
     message(STATUS "\t ${element}")
 endforeach ()
 
-add_executable(${PLATFORM_EXECUTABLE} ${SOURCES})
+if(MSVC)
+    add_executable(${PLATFORM_EXECUTABLE} WIN32 ${SOURCES})
+else()
+    add_executable(${PLATFORM_EXECUTABLE} ${SOURCES})
+endif()
+
 target_include_directories(${PLATFORM_EXECUTABLE} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
 # game dll
@@ -60,6 +64,8 @@ if(MSVC)
         $<$<CONFIG:Release>:
             /O2
         >)
+
+    set_target_properties(${PLATFORM_EXECUTABLE} PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 
     target_compile_options(${PLATFORM_EXECUTABLE} PRIVATE ${COMMON_COMPILER_FLAGS})
     target_compile_options(${GAME_DLL} PRIVATE ${COMMON_COMPILER_FLAGS})

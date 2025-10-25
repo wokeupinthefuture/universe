@@ -64,6 +64,22 @@ void unloadGameCode(GameCode& game)
     game.isLoaded = false;
 }
 
+void loadAssetsByType(AssetType type)
+{
+    static AssetType assetLoadType;
+    assetLoadType = type;
+    Platform::forEachFileInDirectory(ASSETS_PATH[(i32)assetLoadType],
+        [](const char* fileName)
+        {
+            if (assetLoadType == AssetType::ObjMesh && !strstr(fileName, ".obj"))
+                return;
+            char filePath[256]{};
+            sprintf(filePath, "%s\\%s", ASSETS_PATH[(i32)assetLoadType], fileName);
+            arrayPush(g_context->platform.assets[(i32)assetLoadType],
+                Platform::loadAsset(filePath, assetLoadType, g_context->platformMemory, g_context->tempMemory));
+        });
+}
+
 int main()
 {
     Context context{};
@@ -84,14 +100,8 @@ int main()
     context.render.screenSize = INITIAL_WINDOW_SIZE;
     defer({ Platform::closeWindow(context.platform.window); });
 
-    Platform::forEachFileInDirectory(ASSETS_PATH,
-        [](const char* fileName)
-        {
-            char filePath[256]{};
-            sprintf(filePath, "%s\\%s", ASSETS_PATH, fileName);
-            arrayPush(g_context->platform.assets,
-                Platform::loadAsset(filePath, AssetType::ObjMesh, g_context->platformMemory, g_context->tempMemory));
-        });
+    loadAssetsByType(AssetType::ObjMesh);
+    loadAssetsByType(AssetType::Texture);
 
     auto game = loadGameCode();
 

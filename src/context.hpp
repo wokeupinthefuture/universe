@@ -10,7 +10,7 @@
 struct CameraController
 {
     static constexpr auto PITCH_YAW_SMOOTHING = 30.f;
-    static constexpr auto DEFAULT_SPEED = 10.f;
+    static constexpr auto DEFAULT_SPEED = 5.f;
     Entity* camera;
     bool isPressed;
     vec2 pressedPos;
@@ -26,6 +26,7 @@ struct GameState
     Entity* grid;
     Entity* sphere;
     Entity* cube;
+    Entity* quad;
     CameraController cameraController;
     Entity* light;
     Entity* lightOrigin;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.hpp"
-#include "common/log.hpp"
 
 struct Arena
 {
@@ -28,13 +27,13 @@ inline void* arenaAlloc(Arena& arena, size_t allocSize, size_t allocAlign)
 
     const auto ptr = arena.buffer + arena.used + padding;
 
-    logInfo("arena allocated %.3f mb / %.2f kb / %llu bytes (padding: %llu), from 0x%llx to 0x%llx",
-        std::round((float)allocSize / 1024 / 1024),
-        std::round((float)allocSize / 1024),
-        allocSize + padding,
-        padding,
-        ptr,
-        ptr + allocSize);
+    // logInfo("arena allocated %.3f mb / %.2f kb / %llu bytes (padding: %llu), from 0x%llx to 0x%llx",
+    //     std::round((float)allocSize / 1024 / 1024),
+    //     std::round((float)allocSize / 1024),
+    //     allocSize + padding,
+    //     padding,
+    //     ptr,
+    //     ptr + allocSize);
 
     memset(ptr, 0, allocSize);
     arena.prevUsed = arena.used;
@@ -53,6 +52,11 @@ template <typename T>
 inline T* arenaAlloc(Arena& arena)
 {
     return (T*)arenaAlloc(arena, sizeof(T), alignof(T));
+}
+
+inline void arenaPop(Arena& arena)
+{
+    arena.used = arena.prevUsed;
 }
 
 inline void arenaClear(Arena& arena)

@@ -10,6 +10,12 @@ void setShaderVariableVec2(DrawCommand& command, const char* variableName, vec2 
 void setShaderVariableVec3(DrawCommand& command, const char* variableName, vec3 value);
 void setShaderVariableVec4(DrawCommand& command, const char* variableName, vec4 value);
 void setShaderVariableMat4(DrawCommand& command, const char* variableName, mat4 value);
+int getShaderVariableInt(DrawCommand& command, const char* variableName);
+float getShaderVariableFloat(DrawCommand& command, const char* variableName);
+vec2 getShaderVariableVec2(DrawCommand& command, const char* variableName);
+vec3 getShaderVariableVec3(DrawCommand& command, const char* variableName);
+vec4 getShaderVariableVec4(DrawCommand& command, const char* variableName);
+mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName);
 
 enum class ShaderType
 {
@@ -58,7 +64,7 @@ static_assert(sizeof(Variables) % 16 == 0, "Constant buffer size must be a multi
 static constexpr Variables DEFAULT_VARIABLES = {
     .world = {},
     .mvp = {},
-    .objectColor = {0.5f, 0.f, 0.5f, 1.f},
+    .objectColor = {1.f, 1.f, 1.f, 1.f},
     .lightColor = {1.f, 1.f, 1.f, 1.f},
     .lightDirection = {0.f, 0.f, 1.f},
     ._padding0 = {},

@@ -9,11 +9,20 @@ static constexpr auto MAX_ENTITY_CHILDREN = 5;
 
 enum class EntityType
 {
-    Default = 1 << 0,
-    Drawable = 1 << 1,
-    Camera = 1 << 2,
-    Light = 1 << 3
+    Default = BIT(0),
+    Drawable = BIT(1),
+    Camera = BIT(2),
+    Light = BIT(3)
 };
+
+DEFINE_ENUM_BITWISE_OPERATORS(EntityType)
+
+enum class EntityFlag
+{
+    Active = BIT(0)
+};
+
+DEFINE_ENUM_BITWISE_OPERATORS(EntityFlag)
 
 enum class LightType
 {
@@ -26,7 +35,7 @@ struct Entity
     String name;
     Entity* parent;
     Entity* children[MAX_ENTITY_CHILDREN];
-    bool active;
+    EntityFlag flags;
     EntityType type;
 
     vec3 position;
@@ -53,11 +62,9 @@ struct Entity
 
     // drawable
     struct DrawCommand* drawCommand;
-    vec4 color;
 
     // light
     vec3 lightDirection;
-    vec4 lightColor;
     LightType lightType;
 
     bool guiIsLocal;
@@ -69,11 +76,7 @@ struct EntityManager
     HeapArray<Entity> entities;
 };
 
-void setInternalPointer(EntityManager& manager, Arena& tempMemory);
-
 void updateTransform(Entity& entity);
-
-void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform = false);
 
 void setLocalPosition(Entity& entity, vec3 pos);
 void addLocalPosition(Entity& entity, vec3 pos);
@@ -87,6 +90,9 @@ void setWorldRotation(Entity& entity, vec3 euler);
 void addLocalRotation(Entity& entity, vec3 euler);
 void setWorldScale(Entity& entity, vec3 scale);
 
+void setEntityFlag(Entity& entity, EntityFlag flag);
+void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform = false);
+
 void setLightDirection(Entity& light, vec3 direction);
 void setLightType(Entity& light, LightType type);
 void setColor(Entity& entity, vec4 color);
@@ -99,14 +105,3 @@ vec3 getWorldUpVector(Entity& entity);
 vec3 getWorldForwardVector(Entity& entity);
 
 bool hasType(Entity const& entity, EntityType type);
-
-constexpr EntityType operator|(EntityType lhs, EntityType rhs);
-constexpr EntityType& operator|=(EntityType& lhs, EntityType rhs);
-
-constexpr EntityType operator&(EntityType lhs, EntityType rhs);
-constexpr EntityType& operator&=(EntityType& lhs, EntityType rhs);
-
-constexpr EntityType operator^(EntityType lhs, EntityType rhs);
-constexpr EntityType& operator^=(EntityType& lhs, EntityType rhs);
-
-constexpr EntityType operator~(EntityType rhs);

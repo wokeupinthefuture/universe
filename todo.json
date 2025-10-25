@@ -12,11 +12,13 @@
         "reparenting, world transform setters",
         "imgui unparenting",
         "custom geometry loader",
-        "depth buffer"
+        "depth buffer",
+        "dynamic obj loader",
+        "uv & texture struct"
     ],
-    "current": "arrow mesh for visualizing vectors",
+    "current": "fix sphere geometry",
     "todo": [
-        "sphere geometry normals",
+        "gizmos",
         "gravity physics",
         "fancy shaders for a planet/star shape"
     ]

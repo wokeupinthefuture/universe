@@ -52,4 +52,5 @@ int signum(T val)
 
 float remap(float source, float sourceFrom, float sourceTo, float targetFrom, float targetTo);
 
+const char* vec2ToString(struct Arena& arena, vec2 v);
 const char* vec3ToString(struct Arena& arena, vec3 v);

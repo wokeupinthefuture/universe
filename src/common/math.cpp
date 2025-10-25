@@ -147,3 +147,10 @@ const char* vec3ToString(Arena& arena, vec3 v)
     sprintf(string, "%f, %f, %f", v.x, v.y, v.z);
     return string;
 }
+
+const char* vec2ToString(Arena& arena, vec2 v)
+{
+    auto string = arenaAlloc<char>(arena, 256);
+    sprintf(string, "%f, %f", v.x, v.y);
+    return string;
+}

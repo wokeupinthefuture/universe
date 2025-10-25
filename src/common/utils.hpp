@@ -40,9 +40,6 @@ using u64 = std::uint64_t;
 #define Gigabytes(count) (Megabytes(count) * 1024)
 
 #define BIT(bit) 1 << bit
-#define setBit(number, bit) ((i32)number) | (1 << (i32)bit)
-#define clearBit(number, bit) ((i32)number) & ~(1 << (i32)bit)
-#define checkBit(number, bit) ((i32)(number) >> (i32)bit) & 1
 
 #define ARR_LENGTH(arr) sizeof(arr) / sizeof(arr[0])
 
@@ -77,3 +74,42 @@ inline float getElapsedTime()
     std::chrono::duration<float> duration = now - start;
     return duration.count();  // Returns elapsed time in seconds
 }
+
+#define DEFINE_ENUM_BITWISE_OPERATORS(EnumType)                                                                       \
+    inline constexpr EnumType operator|(EnumType lhs, EnumType rhs)                                                   \
+    {                                                                                                                 \
+        return static_cast<EnumType>(                                                                                 \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) | static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+    }                                                                                                                 \
+    inline constexpr EnumType& operator|=(EnumType& lhs, EnumType rhs)                                                \
+    {                                                                                                                 \
+        lhs = static_cast<EnumType>(                                                                                  \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) | static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+        return lhs;                                                                                                   \
+    }                                                                                                                 \
+    inline constexpr EnumType operator&(EnumType lhs, EnumType rhs)                                                   \
+    {                                                                                                                 \
+        return static_cast<EnumType>(                                                                                 \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) & static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+    }                                                                                                                 \
+    inline constexpr EnumType& operator&=(EnumType& lhs, EnumType rhs)                                                \
+    {                                                                                                                 \
+        lhs = static_cast<EnumType>(                                                                                  \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) & static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+        return lhs;                                                                                                   \
+    }                                                                                                                 \
+    inline constexpr EnumType operator^(EnumType lhs, EnumType rhs)                                                   \
+    {                                                                                                                 \
+        return static_cast<EnumType>(                                                                                 \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) ^ static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+    }                                                                                                                 \
+    inline constexpr EnumType& operator^=(EnumType& lhs, EnumType rhs)                                                \
+    {                                                                                                                 \
+        lhs = static_cast<EnumType>(                                                                                  \
+            static_cast<std::underlying_type_t<EnumType>>(lhs) ^ static_cast<std::underlying_type_t<EnumType>>(rhs)); \
+        return lhs;                                                                                                   \
+    }                                                                                                                 \
+    inline constexpr EnumType operator~(EnumType rhs)                                                                 \
+    {                                                                                                                 \
+        return static_cast<EnumType>(~static_cast<std::underlying_type_t<EnumType>>(rhs));                            \
+    }

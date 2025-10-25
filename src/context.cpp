@@ -14,7 +14,9 @@ void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
     arrayInit(context.render.drawCommands, context.gameMemory, "draw commands");
     arrayInit(context.entityManager.entities, context.gameMemory, "entities");
     arrayInit(context.render.loadedMeshes, context.gameMemory, "loaded meshes");
-    arrayInit(context.platform.assets, context.platformMemory, "platform assets");
+    arrayInit(context.render.loadedTextures, context.gameMemory, "loaded textures");
+    for (size_t i = 0; i < (i32)AssetType::Max; ++i)
+        arrayInit(context.platform.assets[i], context.platformMemory, ASSETS_PATH[i]);
 }
 
 void contextHotReload(Context& context)
@@ -25,6 +27,7 @@ void contextHotReload(Context& context)
     arrayInit(context.render.drawCommands, context.gameMemory, "draw commands");
     arrayInit(context.entityManager.entities, context.gameMemory, "entities");
     arrayInit(context.render.loadedMeshes, context.gameMemory, "loaded meshes");
+    arrayInit(context.render.loadedTextures, context.gameMemory, "loaded textures");
 }
 
 void contextDeinit(Context& context)
@@ -32,7 +35,9 @@ void contextDeinit(Context& context)
     arrayClear(context.entityManager.entities);
     arrayClear(context.render.drawCommands);
     arrayClear(context.render.loadedMeshes);
-    arrayClear(context.platform.assets);
+    arrayClear(context.render.loadedTextures);
+    for (size_t i = 0; i < (i32)AssetType::Max; ++i)
+        arrayClear(context.platform.assets[i]);
 
     arenaDeinit(context.gameMemory);
     arenaDeinit(context.tempMemory);

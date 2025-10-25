@@ -1,57 +1,7 @@
 #include "geometry.hpp"
-#include "common/utils.hpp"
-#include "platform.hpp"
-#include "common/memory.hpp"
-#include <type_traits>
-
-constexpr MeshFlags operator|(MeshFlags lhs, MeshFlags rhs)
-{
-    return static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) | static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-}
-
-constexpr MeshFlags& operator|=(MeshFlags& lhs, MeshFlags rhs)
-{
-    lhs = static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) | static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-    return lhs;
-}
-
-constexpr MeshFlags operator&(MeshFlags lhs, MeshFlags rhs)
-{
-    return static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) & static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-}
-
-constexpr MeshFlags& operator&=(MeshFlags& lhs, MeshFlags rhs)
-{
-    lhs = static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) & static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-    return lhs;
-}
-
-constexpr MeshFlags operator^(MeshFlags lhs, MeshFlags rhs)
-{
-    return static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) ^ static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-}
-
-constexpr MeshFlags& operator^=(MeshFlags& lhs, MeshFlags rhs)
-{
-    lhs = static_cast<MeshFlags>(
-        static_cast<std::underlying_type_t<MeshFlags>>(lhs) ^ static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-    return lhs;
-}
-
-constexpr MeshFlags operator~(MeshFlags rhs)
-{
-    return static_cast<MeshFlags>(~static_cast<std::underlying_type_t<MeshFlags>>(rhs));
-}
 
 static vec3 computeFaceNormal(vec3 v1, vec3 v2, vec3 v3)
 {
-    // const auto edge1 = (v2 - v1) * vec3(-1, -1, -1);
-    // const auto edge2 = (v3 - v1) * vec3(-1, -1, -1);
     const auto edge1 = (v2 - v1);
     const auto edge2 = (v3 - v1);
     const auto crossProd = cross(edge1, edge2);
@@ -73,7 +23,7 @@ static Mesh generateSphere(float radius,
     mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
     mesh.indicesCount = indicesCount;
-    mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+    mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
     mesh.id = (size_t)GeneratedMesh::Sphere;
 
     size_t vertexCount = 0;
@@ -148,7 +98,7 @@ static Mesh generateGrid(
     mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
     mesh.indicesCount = indicesCount;
-    mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+    mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
     mesh.id = (size_t)GeneratedMesh::Grid;
 
     i32 vertexCount = 0;
@@ -187,33 +137,49 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
     {
         case GeneratedMesh::Triangle:
         {
-            static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.0f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}}};
+            static Vertex VERTICES[] = {
+                {
+                    .pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.0f, 1.0f}  // Bottom-left
+                },
+                {
+                    .pos = vec3{0.0f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.5f, 0.0f}  // Top-center
+                },
+                {
+                    .pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{1.0f, 1.0f}  // Bottom-right
+                }};
             static u32 INDICES[] = {0, 1, 2};
 
             mesh.vertices = VERTICES;
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Triangle;
 
             break;
         }
         case GeneratedMesh::Quad:
         {
-            static Vertex VERTICES[] = {{.pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{-0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}}};
+            static Vertex VERTICES[] = {
+                {
+                    .pos = vec3{-0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.0f, 1.0f}  // Bottom-left
+                },
+                {
+                    .pos = vec3{-0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.0f, 0.0f}  // Top-left
+                },
+                {
+                    .pos = vec3{0.5f, 0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{1.0f, 0.0f}  // Top-right
+                },
+                {
+                    .pos = vec3{0.5f, -0.5f, 0.0f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{1.0f, 1.0f}  // Bottom-right
+                }};
             static u32 INDICES[] = {0, 1, 2, 2, 3, 0};
 
             mesh.vertices = VERTICES;
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Quad;
 
             break;
@@ -221,35 +187,40 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
         case GeneratedMesh::Cube:
         {
             static Vertex VERTICES[] = {// Front face (z = 0.5)
-                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
-                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
-                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
-                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}},
-                // Back face (z = -0.5)
-                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
-                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}},
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}, .uv = vec2{0.0f, 1.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}, .uv = vec2{1.0f, 1.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 0.0f, 1.0f}, .uv = vec2{0.0f, 0.0f}},
+
+                // Back face (z = -0.5) - Note: UVs mirrored or repeated based on your preference
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{1.0f, 1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, 0.0f, -1.0f}, .uv = vec2{0.0f, 1.0f}},
+
                 // Left face (x = -0.5)
-                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}, .uv = vec2{0.0f, 1.0f}},
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}, .uv = vec2{1.0f, 1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{-1.0f, 0.0f, 0.0f}, .uv = vec2{0.0f, 0.0f}},
+
                 // Right face (x = 0.5)
-                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
-                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}, .uv = vec2{1.0f, 1.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}, .uv = vec2{0.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{1.0f, 0.0f, 0.0f}, .uv = vec2{0.0f, 1.0f}},
+
                 // Top face (y = 0.5)
-                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
-                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
-                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
-                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}},
+                {.pos = vec3{-0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}, .uv = vec2{0.0f, 1.0f}},
+                {.pos = vec3{-0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}, .uv = vec2{0.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, 0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{0.5f, 0.5f, -0.5f}, .normal = vec3{0.0f, 1.0f, 0.0f}, .uv = vec2{1.0f, 1.0f}},
+
                 // Bottom face (y = -0.5)
-                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
-                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
-                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}},
-                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}}};
+                {.pos = vec3{-0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}, .uv = vec2{0.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, -0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}, .uv = vec2{1.0f, 0.0f}},
+                {.pos = vec3{0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}, .uv = vec2{1.0f, 1.0f}},
+                {.pos = vec3{-0.5f, -0.5f, 0.5f}, .normal = vec3{0.0f, -1.0f, 0.0f}, .uv = vec2{0.0f, 1.0f}}};
 
             // Indices for 6 faces (12 triangles)
             static u32 INDICES[] = {
@@ -295,7 +266,7 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
             mesh.verticesCount = ARR_LENGTH(VERTICES);
             mesh.indices = INDICES;
             mesh.indicesCount = ARR_LENGTH(INDICES);
-            mesh.flags |= MeshFlags::Indexed | MeshFlags::Generated;
+            mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Cube;
 
             break;
@@ -343,26 +314,34 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
 
 Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 {
-    ENSURE(asset.type == AssetType::ObjMesh);
+    bool logVertices = false;
 
-    auto data = arenaAlloc(tempMemory, asset.size, alignof(u8));
-    memcpy(data, asset.data, asset.size);
+    logInfo("loading \'%s\' mesh asset", asset.name.data);
+
+    // if (asset.name == "plane")
+    //     logVertices = true;
+
+    ENSURE(asset.type == AssetType::ObjMesh);
 
     size_t posCount = 0;
     size_t normalCount = 0;
     size_t uvCount = 0;
     size_t verticesCount = 0;
 
-    auto line = strtok((char*)data, "\n");
-    while (line)
-    {
-        char lineHeader[256]{};
-        (void)sscanf(line, "%s", lineHeader);
+    const auto lines = strSplit(String{.data = (char*)asset.data, .length = asset.size}, STR_NEWL, tempMemory);
 
-        auto isPosLine = strcmp(lineHeader, "v") == 0;
-        auto isNormalLine = strcmp(lineHeader, "vn") == 0;
-        auto isUVLine = strcmp(lineHeader, "vt") == 0;
-        auto isIndexLine = strcmp(lineHeader, "f") == 0;
+    for (const auto& line : lines)
+    {
+        auto headerStart = strFindNot(line, STR_WHITESPACE, false);
+        if (!headerStart)
+            break;
+
+        auto header = strFindUntil(headerStart, STR_WHITESPACE, false);
+
+        auto isPosLine = header == "v";
+        auto isNormalLine = header == "vn";
+        auto isUVLine = header == "vt";
+        auto isIndexLine = header == "f";
 
         if (isPosLine)
             posCount++;
@@ -372,11 +351,7 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
             uvCount++;
         else if (isIndexLine)
             verticesCount++;
-
-        line = strtok(nullptr, "\n");
     }
-
-    memcpy(data, asset.data, asset.size);
 
     auto posBuffer = arenaAlloc<vec3>(tempMemory, posCount);
     auto normalBuffer = arenaAlloc<vec3>(tempMemory, normalCount);
@@ -386,58 +361,81 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
     auto normalIndicesBuffer = arenaAlloc<u32>(tempMemory, verticesCount * 3);
     auto uvIndicesBuffer = arenaAlloc<u32>(tempMemory, verticesCount * 3);
 
-    line = strtok((char*)data, "\n");
-    for (size_t posIdx = 0, normalIdx = 0, uvIdx = 0, indexIdx = 0; line;)
-    {
-        char lineHeader[256]{};
-        (void)sscanf(line, "%s", lineHeader);
+    bool withoutUV = false;
 
-        auto isPosLine = strcmp(lineHeader, "v") == 0;
-        auto isNormalLine = strcmp(lineHeader, "vn") == 0;
-        auto isUVLine = strcmp(lineHeader, "vt") == 0;
-        auto isIndexLine = strcmp(lineHeader, "f") == 0;
+    for (size_t lineIdx = 0, posIdx = 0, normalIdx = 0, uvIdx = 0, indexIdx = 0; lineIdx < lines.size; ++lineIdx)
+    {
+        auto line = lines[lineIdx];
+
+        auto headerStart = strFindNot(line, STR_WHITESPACE, false);
+        if (!headerStart)
+            break;
+
+        auto header = strFindUntil(headerStart, STR_WHITESPACE, false);
+
+        auto isPosLine = header == "v";
+        auto isNormalLine = header == "vn";
+        auto isUVLine = header == "vt";
+        auto isIndexLine = header == "f";
 
         if (isPosLine)
         {
             auto& vec = posBuffer[posIdx];
-            const auto matches = sscanf(line + 2, "%f %f %f", &vec.x, &vec.y, &vec.z);
+            const auto matches = sscanf(header.data + header.length, "%f %f %f", &vec.x, &vec.y, &vec.z);
             ENSURE(matches == 3);
+
+            if (logVertices)
+            {
+                logInfo("extracted %i pos: %f %f %f", normalIdx, vec[0], vec[1], vec[2]);
+            }
+
             posIdx++;
         }
         else if (isNormalLine)
         {
             auto& vec = normalBuffer[normalIdx];
-            const auto matches = sscanf(line + 2, "%f %f %f", &vec.x, &vec.y, &vec.z);
+            const auto matches = sscanf(header.data + header.length, "%f %f %f", &vec.x, &vec.y, &vec.z);
             ENSURE(matches == 3);
+
+            if (logVertices)
+            {
+                logInfo("extracted %i normal: %f %f %f", normalIdx, vec[0], vec[1], vec[2]);
+            }
+
             normalIdx++;
         }
         else if (isUVLine)
         {
             auto& vec = uvBuffer[uvIdx];
-            const auto matches = sscanf(line + 2, "%f %f", &vec.x, &vec.y);
+            const auto matches = sscanf(header.data + header.length, "%f %f", &vec.x, &vec.y);
             ENSURE(matches == 2);
+
+            if (logVertices)
+            {
+                logInfo("extracted %i uv: %f %f ", normalIdx, vec[0], vec[1]);
+            }
+
             uvIdx++;
         }
         else if (isIndexLine)
         {
-            bool withoutUV = false;
             u32 posIndices[3]{}, normalIndices[3]{}, uvIndices[3]{};
-            auto matches = sscanf(line + 2,
+            auto matches = sscanf(header.data + header.length,
                 "%u/%u/%u %u/%u/%u %u/%u/%u",
                 &posIndices[0],
-                &normalIndices[0],
                 &uvIndices[0],
+                &normalIndices[0],
                 &posIndices[1],
-                &normalIndices[1],
                 &uvIndices[1],
+                &normalIndices[1],
                 &posIndices[2],
-                &normalIndices[2],
-                &uvIndices[2]);
+                &uvIndices[2],
+                &normalIndices[2]);
             if (matches != 9)
             {
                 withoutUV = true;
                 // check export without uv
-                matches = sscanf(line + 2,
+                matches = sscanf(header.data + header.length,
                     "%u//%u %u//%u %u//%u",
                     &posIndices[0],
                     &normalIndices[0],
@@ -453,17 +451,15 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
             posIndicesBuffer[indexIdx * 3 + 0] = posIndices[0];
             posIndicesBuffer[indexIdx * 3 + 1] = posIndices[1];
             posIndicesBuffer[indexIdx * 3 + 2] = posIndices[2];
-            normalIndicesBuffer[indexIdx * 3 + 0] = normalIndices[0];
-            normalIndicesBuffer[indexIdx * 3 + 1] = normalIndices[1];
-            normalIndicesBuffer[indexIdx * 3 + 2] = normalIndices[2];
             uvIndicesBuffer[indexIdx * 3 + 0] = uvIndices[0];
             uvIndicesBuffer[indexIdx * 3 + 1] = uvIndices[1];
             uvIndicesBuffer[indexIdx * 3 + 2] = uvIndices[2];
+            normalIndicesBuffer[indexIdx * 3 + 0] = normalIndices[0];
+            normalIndicesBuffer[indexIdx * 3 + 1] = normalIndices[1];
+            normalIndicesBuffer[indexIdx * 3 + 2] = normalIndices[2];
 
             indexIdx++;
         }
-
-        line = strtok(nullptr, "\n");
     }
 
     verticesCount *= 3;
@@ -476,10 +472,24 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
         vertices[i].pos = posBuffer[posIdx - 1];
         const auto normalIdx = normalIndicesBuffer[i];
         vertices[i].normal = normalBuffer[normalIdx - 1];
-        // vertices[i].uv = uvIndicesBuffer[uvIndicesBuffer[i - 1]];
+        if (!withoutUV)
+        {
+            const auto uvIdx = uvIndicesBuffer[i];
+            vertices[i].uv = uvBuffer[uvIdx - 1];
+        }
     }
 
     logInfo("loaded \'%s\' mesh asset, vertices: %i", asset.name.data, verticesCount);
+
+    if (logVertices)
+        for (size_t i = 0; i < verticesCount; ++i)
+        {
+            logInfo("mesh vertex %i: pos: %s, normal: %s, uv: %s",
+                i,
+                vec3ToString(tempMemory, vertices[i].pos),
+                vec3ToString(tempMemory, vertices[i].normal),
+                vec2ToString(tempMemory, vertices[i].uv));
+        }
 
     Mesh mesh{};
 

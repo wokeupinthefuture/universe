@@ -2,10 +2,8 @@
 
 #include "context.hpp"
 #include "common/string.cpp"
-#include "platform.hpp"
 #include "common/math.cpp"
 #include "geometry.cpp"
-#include "renderer.hpp"
 #include "shaders.cpp"
 #include "renderer_dx11.cpp"
 #include "gui.cpp"
@@ -18,7 +16,7 @@ Entity defaultEntity()
 {
     Entity e{};
     e.name = strFromLiteral("entity");
-    e.active = true;
+    e.flags = EntityFlag::Active;
     e.scale = vec3(1.f, 1.f, 1.f);
     e.isWorldMatrixDirty = true;
     e.guiIsLocal = true;
@@ -46,7 +44,7 @@ Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType 
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
 
-    const auto mesh = findMeshByName(renderState.loadedMeshes, strFromNullTerm(meshName));
+    const auto mesh = findMeshByName(renderState, strFromNullTerm(meshName));
     if (mesh == nullptr)
     {
         logError("%s mesh not found", meshName);
@@ -63,12 +61,13 @@ Entity* pushLight(RenderState& renderState, LightType type)
     auto entity = defaultEntity();
     entity.type = EntityType::Light | EntityType::Drawable;
 
-    const auto mesh = findMeshByName(renderState.loadedMeshes, strFromLiteral("bulb"));
+    const auto mesh = findMeshByName(renderState, strFromLiteral("bulb"));
     if (mesh == nullptr)
     {
         logError("bulb mesh not found");
         ENSURE(false);
     }
+
     entity.drawCommand = pushDrawCmd(renderState, mesh, ShaderType::Unlit);
 
     entity.name = strFromLiteral("light");
@@ -100,7 +99,7 @@ void gameInit(Context& ctx)
 
     g_context = &ctx;
 
-    renderInitGeometry(ctx.render, ctx.platform.assets);
+    renderInitResources(ctx.render, ctx.platform.assets);
     renderInit(ctx.render, ctx.platform.window);
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
@@ -123,9 +122,11 @@ void gameInit(Context& ctx)
     ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere);
     setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
     ctx.gameState.cube = pushDrawable(ctx.render, GeneratedMesh::Cube);
+    setTexture(*ctx.gameState.cube->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("pepe")));
     setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
-    setColor(*ctx.gameState.cube, vec4(1.f, 1.f, 0.2f, 1.f));
-    setColor(*ctx.gameState.sphere, vec4(0.2f, 1.f, 0.5f, 1.f));
+
+    ctx.gameState.quad = pushDrawable(ctx.render, GeneratedMesh::Quad);
+    setTexture(*ctx.gameState.quad->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("sonic")));
 
     ctx.gameState.cameraController = {};
     ctx.gameState.cameraController.camera = &ctx.entityManager.camera;
@@ -136,6 +137,7 @@ void gameInit(Context& ctx)
     ctx.gameState.lightOrigin->name = strFromLiteral("light origin");
     setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
     ctx.gameState.light = pushLight(ctx.render, LightType::Point);
+    setLocalPosition(*ctx.gameState.light, vec3(-1, 0, 0));
     setParent(*ctx.gameState.light, ctx.gameState.lightOrigin, true);
 
     setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
@@ -148,6 +150,11 @@ void gameInit(Context& ctx)
     for (auto& entity : ctx.entityManager.entities)
         if (hasType(entity, EntityType::Drawable))
             updateTransform(entity);
+
+    for (auto& entity : ctx.entityManager.entities)
+        setEntityFlag(entity, ~(EntityFlag::Active));
+
+    setEntityFlag(*ctx.gameState.quad, EntityFlag::Active);
 }
 
 void gamePreHotReload(Context& ctx)
@@ -280,6 +287,7 @@ void guiEntityContents(Context& ctx, Entity& entity)
             }
         }
     }
+
     if (ImGui::RadioButton("local", entity.guiIsLocal))
         entity.guiIsLocal = true;
     ImGui::SameLine();
@@ -323,22 +331,22 @@ void guiEntityContents(Context& ctx, Entity& entity)
                 setLightDirection(entity, direction);
             }
         }
+    }
 
-        auto color = entity.lightColor;
+    if (hasType(entity, EntityType::Drawable))
+    {
+        ImGui::Text("shader: %s", (entity.drawCommand->shader == ShaderType::Basic) ? "basic" : "unlit");
+        auto color = getShaderVariableVec4(*entity.drawCommand, "objectColor");
         if (ImGui::ColorEdit4("color", &color.x))
         {
             setColor(entity, color);
         }
     }
 
-    if (hasType(entity, EntityType::Drawable))
+    bool active = bool(entity.flags & EntityFlag::Active);
+    if (ImGui::Checkbox("active", &active))
     {
-        ImGui::Text("shader: %s", (entity.drawCommand->shader == ShaderType::Basic) ? "basic" : "unlit");
-        auto color = entity.color;
-        if (ImGui::ColorEdit4("color", &color.x))
-        {
-            setColor(entity, color);
-        }
+        setEntityFlag(entity, active ? EntityFlag::Active : ~(EntityFlag::Active));
     }
 
     ImGui::PopID();
@@ -513,9 +521,6 @@ void gameUpdateAndRender(Context& ctx)
             setShaderVariableFloat(*entity.drawCommand, "time", time);
     }
 
-    if (isKeyPressed(KeyboardKey::KEY_ESCAPE))
-        ctx.wantsToQuit = true;
-
     if (wasKeyPressed(KeyboardKey::KEY_R))
         ctx.wantsToReload = true;
 
@@ -525,7 +530,7 @@ void gameUpdateAndRender(Context& ctx)
     const auto sine = std::sin(time) * dt;
     addLocalRotation(*ctx.gameState.cube, vec3(0, speed, 0));
     addLocalRotation(*ctx.gameState.sphere, vec3(speed * 0.7, 0, 0));
-    addLocalPosition(*ctx.gameState.lightOrigin, vec3(0, sine, 0));
+    addLocalPosition(*ctx.gameState.lightOrigin, vec3(sine, 0, 0));
 
     if (ctx.render.needsToResize)
     {
@@ -538,7 +543,8 @@ void gameUpdateAndRender(Context& ctx)
     static vec4 clearColor{0, 0, 0, 1};
     renderClearAndResize(ctx.render, clearColor);
     for (const auto& command : ctx.render.drawCommands)
-        renderDraw(command);
+        if (bool(command.flags & DrawFlag::Active))
+            renderDraw(command);
     guiDraw();
     renderPresent();
 

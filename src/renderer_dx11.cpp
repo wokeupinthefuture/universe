@@ -19,10 +19,12 @@ static ComPtr<ID3D11DepthStencilState> s_dss;
 
 static HeapArray<ID3D11Buffer*> s_vertexBuffers;
 static HeapArray<ID3D11Buffer*> s_indexBuffers;
+static HeapArray<ID3D11ShaderResourceView*> s_textureViews;
+static ID3D11SamplerState* s_textureSampler;
 
 size_t getMeshBufferIndex(Mesh const& mesh)
 {
-    return !size_t(mesh.flags & MeshFlags::Generated) * (size_t)GeneratedMesh::Max + mesh.id;
+    return !size_t(mesh.flags & MeshFlag::Generated) * (size_t)GeneratedMesh::Max + mesh.id;
 }
 
 struct ConstantBufferFieldMapping
@@ -110,8 +112,9 @@ static Shader createShader(const wchar_t* path)
     shader.ps = ps;
 
     D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(Vertex::pos), D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex, normal), D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Vertex, uv), D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
     ID3D11InputLayout* layout = nullptr;
     HR_ASSERT(s_device->CreateInputLayout(
@@ -179,7 +182,7 @@ static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
 {
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
     rasterizerDesc.FillMode = state == RasterizerState::Wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
-    rasterizerDesc.CullMode = D3D11_CULL_NONE;  // state == RasterizerState::Wireframe ? D3D11_CULL_NONE : D3D11_CULL_BACK;
+    rasterizerDesc.CullMode = state == RasterizerState::Wireframe ? D3D11_CULL_NONE : D3D11_CULL_BACK;
     rasterizerDesc.FrontCounterClockwise = FALSE;
     rasterizerDesc.DepthClipEnable = TRUE;
 
@@ -248,7 +251,69 @@ static void createRenderTargetAndDepthStencil(vec2 size)
     s_deviceContext->OMSetRenderTargets(1, s_rtView.GetAddressOf(), s_dsView.Get());
 }
 
-void renderInitGeometry(RenderState& state, HeapArray<Asset> const& assets)
+static ID3D11ShaderResourceView* createTexture(u8* imageData, u32 width, u32 height, u32 channels)
+{
+    DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    texDesc.Width = width;
+    texDesc.Height = height;
+    texDesc.MipLevels = 0;
+    texDesc.ArraySize = 1;
+    texDesc.Format = format;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.SampleDesc.Quality = 0;
+    texDesc.Usage = D3D11_USAGE_DEFAULT;
+    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    texDesc.CPUAccessFlags = 0;
+    texDesc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+    ComPtr<ID3D11Texture2D> texture;
+    HR_ASSERT(s_device->CreateTexture2D(&texDesc, nullptr, &texture));
+
+    s_deviceContext->UpdateSubresource(texture.Get(), 0, nullptr, imageData, width * 4, width * height * 4);
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = format;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = -1;
+
+    ID3D11ShaderResourceView* srv = nullptr;
+    HR_ASSERT(s_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv));
+    s_deviceContext->GenerateMips(srv);
+
+    return srv;
+}
+
+ID3D11SamplerState* createTextureSampler()
+{
+    D3D11_SAMPLER_DESC samplerDesc = {};
+
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MinLOD = 0.0f;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    samplerDesc.MaxAnisotropy = 1;
+
+    samplerDesc.BorderColor[0] = 0.0f;
+    samplerDesc.BorderColor[1] = 0.0f;
+    samplerDesc.BorderColor[2] = 0.0f;
+    samplerDesc.BorderColor[3] = 1.0f;
+
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+
+    ID3D11SamplerState* sampler = nullptr;
+    HR_ASSERT(s_device->CreateSamplerState(&samplerDesc, &sampler));
+    return sampler;
+}
+
+void renderInitResources(RenderState& state, HeapArray<Asset>* assets)
 {
     ENSURE(g_context);
 
@@ -258,12 +323,27 @@ void renderInitGeometry(RenderState& state, HeapArray<Asset> const& assets)
     state.generatedMeshes[(i32)GeneratedMesh::Sphere] = generateMesh(GeneratedMesh::Sphere, g_context->tempMemory);
     state.generatedMeshes[(i32)GeneratedMesh::Grid] = generateMesh(GeneratedMesh::Grid, g_context->tempMemory);
 
-    for (size_t i = 0; i < assets.size; ++i)
+    const auto& meshes = assets[(i32)AssetType::ObjMesh];
+    for (size_t i = 0; i < meshes.size; ++i)
     {
-        const auto& asset = assets[i];
+        Asset const& asset = meshes[i];
         auto mesh = loadMesh(asset, g_context->gameMemory, g_context->tempMemory);
         mesh.id = i;
         arrayPush(state.loadedMeshes, mesh);
+    }
+
+    const auto textures = assets[(i32)AssetType::Texture];
+    for (size_t i = 0; i < textures.size; ++i)
+    {
+        const auto& asset = textures[i];
+        arrayPush(state.loadedTextures,
+            {.data = (u8*)asset.data,
+                .size = asset.size,
+                .name = asset.name,
+                .width = asset.textureWidth,
+                .height = asset.textureHeight,
+                .channels = asset.textureChannels,
+                .gpuTextureId = i});
     }
 }
 
@@ -298,6 +378,7 @@ void renderInit(RenderState& state, void* window)
     ENSURE(g_context);
     arrayInit(s_vertexBuffers, g_context->gameMemory, "s_vertexBuffers");
     arrayInit(s_indexBuffers, g_context->gameMemory, "s_indexBuffers");
+    arrayInit(s_textureViews, g_context->gameMemory, "s_textureViews");
 
     for (int i = 0; i < (i32)GeneratedMesh::Max; ++i)
     {
@@ -309,6 +390,13 @@ void renderInit(RenderState& state, void* window)
     {
         arrayPush(s_vertexBuffers, createVertexBuffer(mesh.vertices, mesh.verticesCount));
     }
+
+    for (auto& texture : state.loadedTextures)
+    {
+        arrayPush(s_textureViews, createTexture(texture.data, texture.width, texture.height, texture.channels));
+    }
+
+    s_textureSampler = createTextureSampler();
 
     shaders[(i32)ShaderType::Basic] = createShader(Shaders::Basic::PATH);
     shaders[(i32)ShaderType::Unlit] = createShader(Shaders::Unlit::PATH);
@@ -350,6 +438,7 @@ void renderDeinit()
         buffer->Release();
     arrayClear(s_vertexBuffers, "s_vertexBuffers");
     arrayClear(s_indexBuffers, "s_indexBuffers");
+    arrayClear(s_textureViews, "s_textureViews");
 
     constantBuffer.buffer.Reset();
 
@@ -420,12 +509,21 @@ void renderDraw(DrawCommand const& command)
     s_deviceContext->VSSetShader(shader.vs.Get(), nullptr, 0);
     s_deviceContext->PSSetShader(shader.ps.Get(), nullptr, 0);
 
+    s_deviceContext->PSSetSamplers(0, 1, &s_textureSampler);
+
     s_deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState].Get());
 
-    u32 stride = sizeof(Vertex), offset = 0;
+    for (size_t i = 0; i < MAX_TEXTURE_SLOTS; ++i)
+    {
+        const auto& cpuTexture = command.textures[i];
+        if (!cpuTexture)
+            continue;
+        s_deviceContext->PSSetShaderResources(i, 1, &s_textureViews[cpuTexture->gpuTextureId]);
+    }
 
+    u32 stride = sizeof(Vertex), offset = 0;
     s_deviceContext->IASetVertexBuffers(0, 1, &s_vertexBuffers[getMeshBufferIndex(*command.mesh)], &stride, &offset);
-    if (bool(command.mesh->flags & MeshFlags::Indexed))
+    if (bool(command.mesh->flags & MeshFlag::Indexed))
     {
         s_deviceContext->IASetIndexBuffer(s_indexBuffers[getMeshBufferIndex(*command.mesh)], DXGI_FORMAT_R32_UINT, 0);
         s_deviceContext->DrawIndexed(command.mesh->indicesCount, 0, 0);
@@ -434,6 +532,12 @@ void renderDraw(DrawCommand const& command)
     {
         s_deviceContext->Draw(command.mesh->verticesCount, 0);
     }
+
+    ID3D11ShaderResourceView* textureSlots[]{nullptr, nullptr, nullptr};
+    s_deviceContext->PSSetShaderResources(0, 3, textureSlots);
+
+    ID3D11SamplerState* nullSamplers[] = {nullptr, nullptr};
+    s_deviceContext->PSSetSamplers(0, 2, nullSamplers);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color)

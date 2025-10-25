@@ -15,38 +15,38 @@
         const auto result = expr;                                                 \
         if (FAILED(result))                                                       \
         {                                                                         \
-            _logVerbose = true;                                                   \
             logError("platform call failed: " #expr ", hresult: 0x%08x", result); \
-            _logVerbose = false;                                                  \
             assert(false);                                                        \
         }                                                                         \
     } while (0)
+
 #define LOGIC_ERROR()             \
     do                            \
     {                             \
-        _logVerbose = true;       \
         logError("logic error!"); \
-        _logVerbose = false;      \
         assert(false);            \
     } while (0)
-#define ENSURE(x)                            \
-    do                                       \
-    {                                        \
-        if (!(x))                            \
-        {                                    \
-            _logFile = __FILE__;             \
-            _logLine = __LINE__;             \
-            _logError("ensure failed: " #x); \
-            assert(false);                   \
-        }                                    \
+
+#define ENSURE(x)                          \
+    do                                     \
+    {                                      \
+        if (!(x))                          \
+        {                                  \
+            logError("ensure failed:" #x); \
+            assert(false);                 \
+        }                                  \
     } while (0)
 #endif
 
-static constexpr const char* ASSETS_PATH = "resources/models/";
+static constexpr const char* ASSETS_PATH[] = {
+    "resources/models/",
+    "resources/textures/",
+};
 
 enum class AssetType
 {
     ObjMesh,
+    Texture,
     Max
 };
 
@@ -56,6 +56,9 @@ struct Asset
     String name;
     size_t size;
     AssetType type;
+    u32 textureWidth;
+    u32 textureHeight;
+    u32 textureChannels;
 };
 
 struct PlatformToGameBuffer
@@ -65,7 +68,7 @@ struct PlatformToGameBuffer
     float dpi;
     vec2 lastScreenSize;
     void* guiWindowEventCallback;
-    HeapArray<Asset> assets;
+    HeapArray<Asset> assets[(i32)AssetType::Max];
 };
 
 namespace Platform

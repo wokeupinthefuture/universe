@@ -4,11 +4,16 @@ PSInput VS_Main(VSInput input)
 {
     PSInput output;
     output.clipPos = mul(float4(input.pos, 1.0f), mvp);
+    output.uv = input.uv;
     return output; 
 }
 
 float4 PS_Main(PSInput input) : SV_TARGET
 {   
-    return float4(objectColor.x, objectColor.y, objectColor.z, 1.0);
+    float2 uv = input.uv;
+    float4 textureColor = diffuseTexture.Sample(texSampler, uv);
+    if (all(textureColor == float4(0, 0, 0, 0)))
+        return objectColor;
+    return textureColor * objectColor;
 }
 

@@ -15,6 +15,9 @@
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 namespace Platform
 {
 
@@ -230,6 +233,24 @@ static KeyboardKey translateKeyMapping(int vkKey)
     }
 }
 
+static vec2 getMonitorSize()
+{
+    const auto xScreen = GetSystemMetrics(SM_CXSCREEN);
+    const auto yScreen = GetSystemMetrics(SM_CYSCREEN);
+    return {xScreen, yScreen};
+}
+
+static vec2 getWindowSize(HWND hwnd)
+{
+    vec2 size;
+
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    size = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
+
+    return size;
+}
+
 static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
     ENSURE(g_context);
@@ -306,9 +327,7 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         }
         case WM_SIZE:
         {
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            g_context->platform.lastScreenSize = {(float)rect.right - (float)rect.left, (float)rect.bottom - (float)rect.top};
+            g_context->platform.lastScreenSize = getWindowSize(hwnd);
             break;
         }
 
@@ -323,6 +342,7 @@ static auto WINAPI windowCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 
 Window openWindow(int width, int height, const char* name)
 {
+
     const HINSTANCE hInst = GetModuleHandle(nullptr);
 
     WNDCLASSEX wc{};
@@ -340,7 +360,38 @@ Window openWindow(int width, int height, const char* name)
     BOOL USE_DARK_MODE = true;
     DwmSetWindowAttribute(hwnd, 20, &USE_DARK_MODE, sizeof(USE_DARK_MODE));
 
-    ShowWindow(hwnd, SW_SHOW);
+    const auto monitorEnumCb = [](HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) -> BOOL
+    {
+        MONITORINFOEX mi;
+        mi.cbSize = sizeof(MONITORINFOEX);
+
+        if (GetMonitorInfo(hMonitor, &mi))
+        {
+            if (mi.dwFlags & MONITORINFOF_PRIMARY && strstr(mi.szDevice, "2") == 0)
+                *(bool*)dwData = true;
+        }
+
+        return TRUE;
+    };
+
+    bool isSecondMonitor = false;
+    EnumDisplayMonitors(NULL, NULL, monitorEnumCb, (LPARAM)&isSecondMonitor);
+
+    const auto screenSize = getMonitorSize();
+    const auto windowSize = getWindowSize(hwnd);
+
+    static constexpr auto offset = 250;
+    vec2 windowPos = {(screenSize.x * 0.5f * (isSecondMonitor ? 1 : -1)) - windowSize.x * 0.5f - offset,
+        screenSize.y * 0.5 - windowSize.y * 0.5f};
+    SetWindowPos(hwnd, HWND_TOP, windowPos.x, windowPos.y, width, height, SWP_SHOWWINDOW);
+    const auto consoleHwnd = GetConsoleWindow();
+    SetWindowPos(consoleHwnd,
+        HWND_BOTTOM,
+        windowPos.x + windowSize.x,
+        windowPos.y,
+        windowSize.x * 0.5 - offset * 0.5,
+        height,
+        SWP_SHOWWINDOW);
 
     return hwnd;
 }
@@ -430,28 +481,8 @@ void* loadDynamicFunc(void* lib, const char* funcName)
     return (void*)GetProcAddress((HMODULE)lib, funcName);
 }
 
-Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena& tempMemory)
+static String cloneNameFromPath(const char* path, Arena& cloneMemory, Arena& tempMemory)
 {
-    const auto file = CreateFile(path,                    // file to open
-        GENERIC_READ,                                     // open for reading
-        FILE_SHARE_READ,                                  // share for reading
-        NULL,                                             // default security
-        OPEN_EXISTING,                                    // existing file only
-        FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_READONLY,  // normal file
-        NULL);                                            // no attr. template
-
-    ENSURE(file != INVALID_HANDLE_VALUE);
-
-    DWORD fileSize = GetFileSize(file, nullptr);
-
-    auto buffer = arenaAlloc(permanentMemory, fileSize, alignof(u8));
-
-    DWORD bytesRead{};
-    const auto readResult = ReadFile(file, buffer, fileSize, &bytesRead, nullptr);
-    ENSURE(readResult != FALSE && bytesRead == fileSize);
-
-    CloseHandle(file);
-
     const auto sPath = strClone(path, tempMemory);
 
     const auto nameWithExt = strFindReverse(sPath, strFromLiteral("\\"), false, 1);
@@ -463,12 +494,65 @@ Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena&
     name.data = nameWithExt.data;
     name.length = nameWithExt.length - ext.length;
 
-    return Asset{
-        .data = (u8*)buffer,
-        .name = strClone(name, permanentMemory),
-        .size = fileSize,
-        .type = type,
-    };
+    return strClone(name, cloneMemory);
+}
+
+Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena& tempMemory)
+{
+    Asset asset{};
+
+    const auto file = CreateFile(path,                    // file to open
+        GENERIC_READ,                                     // open for reading
+        FILE_SHARE_READ,                                  // share for reading
+        NULL,                                             // default security
+        OPEN_EXISTING,                                    // existing file only
+        FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_READONLY,  // normal file
+        NULL);                                            // no attr. template
+    ENSURE(file != INVALID_HANDLE_VALUE);
+    defer({ CloseHandle(file); });
+
+    DWORD fileSize = GetFileSize(file, nullptr);
+
+    switch (type)
+    {
+        default: LOGIC_ERROR();
+        case AssetType::ObjMesh:
+        {
+            auto buffer = arenaAlloc(permanentMemory, fileSize + 1, alignof(u8));
+
+            DWORD bytesRead{};
+            const auto readResult = ReadFile(file, buffer, fileSize, &bytesRead, nullptr);
+            ENSURE(readResult != FALSE && bytesRead == fileSize);
+
+            asset.data = (u8*)buffer;
+            asset.name = cloneNameFromPath(path, permanentMemory, tempMemory);
+            asset.size = fileSize;
+            asset.type = type;
+
+            break;
+        }
+        case AssetType::Texture:
+        {
+            i32 w{}, h{}, channels{};
+            const auto buffer = stbi_load(path, &w, &h, &channels, 4);
+            ENSURE(buffer);
+
+            asset.data = buffer;
+            asset.name = cloneNameFromPath(path, permanentMemory, tempMemory);
+            asset.size = fileSize;
+            asset.type = type;
+
+            asset.textureWidth = w;
+            asset.textureHeight = h;
+            asset.textureChannels = channels;
+
+            break;
+        }
+    }
+
+    *(char*)(asset.data + asset.size) = '\0';
+
+    return asset;
 }
 
 void forEachFileInDirectory(const char* directory, void (*callback)(const char*))
@@ -484,7 +568,8 @@ void forEachFileInDirectory(const char* directory, void (*callback)(const char*)
 
     WIN32_FIND_DATA ffd{};
     const auto file = FindFirstFile(directoryWildcard, &ffd);
-    ENSURE(file != INVALID_HANDLE_VALUE);
+    if (file == INVALID_HANDLE_VALUE)
+        return;
 
     if (isValidFile(ffd))
         callback(ffd.cFileName);

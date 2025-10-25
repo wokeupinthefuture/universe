@@ -6,6 +6,7 @@ struct Vertex
 {
     vec3 pos;
     vec3 normal;
+    vec2 uv;
 };
 
 static constexpr String MeshTypeName[] = {strFromLiteral("Triangle"),
@@ -26,19 +27,13 @@ enum class GeneratedMesh
     Max
 };
 
-enum class MeshFlags
+enum class MeshFlag
 {
     Indexed = BIT(0),
     Generated = BIT(1),
 };
 
-constexpr MeshFlags operator|(MeshFlags lhs, MeshFlags rhs);
-constexpr MeshFlags& operator|=(MeshFlags& lhs, MeshFlags rhs);
-constexpr MeshFlags operator&(MeshFlags lhs, MeshFlags rhs);
-constexpr MeshFlags& operator&=(MeshFlags& lhs, MeshFlags rhs);
-constexpr MeshFlags operator^(MeshFlags lhs, MeshFlags rhs);
-constexpr MeshFlags& operator^=(MeshFlags& lhs, MeshFlags rhs);
-constexpr MeshFlags operator~(MeshFlags rhs);
+DEFINE_ENUM_BITWISE_OPERATORS(MeshFlag);
 
 struct Mesh
 {
@@ -46,7 +41,7 @@ struct Mesh
     size_t verticesCount;
     u32* indices;
     size_t indicesCount;
-    MeshFlags flags;
+    MeshFlag flags;
     size_t id;
     String name;
 };

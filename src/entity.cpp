@@ -288,12 +288,9 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
 void setColor(Entity& entity, vec4 color)
 {
     ENSURE(g_context);
-    entity.color = color;
     setShaderVariableVec4(*entity.drawCommand, "objectColor", color);
-
     if (hasType(entity, EntityType::Light))
     {
-        entity.lightColor = color;
         for (auto& other : g_context->entityManager.entities)
         {
             if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
@@ -332,6 +329,44 @@ void setLightDirection(Entity& light, vec3 direction)
     }
 }
 
+void setEntityFlag(Entity& entity, EntityFlag flag)
+{
+    const auto processSingleFlag = [&entity, flag](EntityFlag single, void (*onChanged)(Entity& entity, bool isSet))
+    {
+        bool wasSet = bool(entity.flags & single);
+        bool isSet = bool(flag & single);
+
+        if (isSet)
+            entity.flags |= flag;
+        else
+            entity.flags &= flag;
+
+        if (isSet != wasSet)
+        {
+            onChanged(entity, isSet);
+        }
+    };
+
+    processSingleFlag(EntityFlag::Active,
+        [](Entity& entity, bool isSet)
+        {
+            if (entity.drawCommand)
+            {
+                if (isSet)
+                    entity.drawCommand->flags |= DrawFlag::Active;
+                else
+                    entity.drawCommand->flags &= ~(DrawFlag::Active);
+            }
+        });
+
+    for (const auto& child : entity.children)
+    {
+        if (!child)
+            continue;
+        setEntityFlag(*child, flag);
+    }
+}
+
 vec3 getForwardVector(Entity& entity)
 {
     return getForwardVector(toMat4(entity.rotation));
@@ -360,48 +395,4 @@ vec3 getWorldRightVector(Entity& entity)
 vec3 getWorldUpVector(Entity& entity)
 {
     return getUpVector(toMat4(entity.worldRotation));
-}
-
-constexpr EntityType operator|(EntityType lhs, EntityType rhs)
-{
-    return static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) | static_cast<std::underlying_type_t<EntityType>>(rhs));
-}
-
-constexpr EntityType& operator|=(EntityType& lhs, EntityType rhs)
-{
-    lhs = static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) | static_cast<std::underlying_type_t<EntityType>>(rhs));
-    return lhs;
-}
-
-constexpr EntityType operator&(EntityType lhs, EntityType rhs)
-{
-    return static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) & static_cast<std::underlying_type_t<EntityType>>(rhs));
-}
-
-constexpr EntityType& operator&=(EntityType& lhs, EntityType rhs)
-{
-    lhs = static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) & static_cast<std::underlying_type_t<EntityType>>(rhs));
-    return lhs;
-}
-
-constexpr EntityType operator^(EntityType lhs, EntityType rhs)
-{
-    return static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) ^ static_cast<std::underlying_type_t<EntityType>>(rhs));
-}
-
-constexpr EntityType& operator^=(EntityType& lhs, EntityType rhs)
-{
-    lhs = static_cast<EntityType>(
-        static_cast<std::underlying_type_t<EntityType>>(lhs) ^ static_cast<std::underlying_type_t<EntityType>>(rhs));
-    return lhs;
-}
-
-constexpr EntityType operator~(EntityType rhs)
-{
-    return static_cast<EntityType>(~static_cast<std::underlying_type_t<EntityType>>(rhs));
 }

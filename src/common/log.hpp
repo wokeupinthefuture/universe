@@ -3,76 +3,80 @@
 #include <cstdio>
 #include <ctime>
 
-inline const char* _logFile = nullptr;
-inline int _logLine = 0;
-inline bool _logVerbose = false;
+#include "utils.hpp"
 
-#define logInfo(msg, ...)           \
-    do                              \
-    {                               \
-        _logFile = __FILE__;        \
-        _logLine = __LINE__;        \
-        _logInfo(msg, __VA_ARGS__); \
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <windowsx.h>
+
+inline const char* g_logFile = nullptr;
+inline int g_logLine = 0;
+
+enum class LogFlag
+{
+    Verbose = 1 << 0,
+    Error = 1 << 1
+};
+
+DEFINE_ENUM_BITWISE_OPERATORS(LogFlag)
+
+inline LogFlag g_logFlags = LogFlag::Verbose;
+
+#define logInfo(msg, ...)        \
+    do                           \
+    {                            \
+        g_logFile = __FILE__;    \
+        g_logLine = __LINE__;    \
+        g_log(msg, __VA_ARGS__); \
+    } while (0)
+
+#define logError(msg, ...)             \
+    do                                 \
+    {                                  \
+        g_logFile = __FILE__;          \
+        g_logLine = __LINE__;          \
+        g_logFlags |= LogFlag::Error;  \
+        g_log(msg, __VA_ARGS__);       \
+        g_logFlags &= ~LogFlag::Error; \
     } while (0)
 
 template <typename... Args>
-void _logInfo(const char* message, Args... args)
+void g_log(const char* message, Args... args)
 {
-    char buffer[256];
+    char finalBuffer[1024];
+    char buffer[1024];
 
-    const auto time = std::time(nullptr);
-    const auto localtime = std::localtime(&time);
-
-    char hours[256];
-    std::sprintf(hours, localtime->tm_hour > 9 ? "%i" : "0%i", localtime->tm_hour);
-    char minutes[256];
-    std::sprintf(minutes, localtime->tm_min > 9 ? "%i" : "0%i", localtime->tm_min);
-    char seconds[256];
-    std::sprintf(seconds, localtime->tm_sec > 9 ? "%i" : "0%i", localtime->tm_sec);
-
-    if (_logVerbose)
+    if (bool(g_logFlags & LogFlag::Verbose))
     {
-        std::sprintf(buffer, "[%s:%s:%s][Info][%s:%i] %s\n", hours, minutes, seconds, _logFile, _logLine, message);
-        std::printf(buffer, args...);
+        const auto now = time(nullptr);
+        const auto localTime = localtime(&now);
+
+        char hours[256];
+        sprintf(hours, localTime->tm_hour > 9 ? "%i" : "0%i", localTime->tm_hour);
+        char minutes[256];
+        sprintf(minutes, localTime->tm_min > 9 ? "%i" : "0%i", localTime->tm_min);
+        char seconds[256];
+        sprintf(seconds, localTime->tm_sec > 9 ? "%i" : "0%i", localTime->tm_sec);
+
+        sprintf(buffer, message, args...);
+
+        sprintf(finalBuffer,
+            "[%s:%s:%s][%s][%s:%i] %s\n",
+            hours,
+            minutes,
+            seconds,
+            ((int)g_logFlags & (int)LogFlag::Error) ? "Error" : "Info",
+            g_logFile,
+            g_logLine,
+            buffer);
+
+        OutputDebugStringA(finalBuffer);
     }
     else
     {
-        std::sprintf(buffer, "%s\n", message);
-        std::printf(buffer, args...);
-    }
-}
-
-#define logError(msg, ...)           \
-    do                               \
-    {                                \
-        _logFile = __FILE__;         \
-        _logLine = __LINE__;         \
-        _logError(msg, __VA_ARGS__); \
-    } while (0)
-
-template <typename... Args>
-void _logError(const char* message, Args... args)
-{
-    char buffer[256];
-
-    const auto time = std::time(nullptr);
-    const auto localtime = std::localtime(&time);
-
-    char hours[256];
-    std::sprintf(hours, localtime->tm_hour > 9 ? "%i" : "0%i", localtime->tm_hour);
-    char minutes[256];
-    std::sprintf(minutes, localtime->tm_min > 9 ? "%i" : "0%i", localtime->tm_min);
-    char seconds[256];
-    std::sprintf(seconds, localtime->tm_sec > 9 ? "%i" : "0%i", localtime->tm_sec);
-
-    if (_logVerbose)
-    {
-        std::sprintf(buffer, "[%s:%s:%s][Error][%s:%i] %s\n", hours, minutes, seconds, _logFile, _logLine, message);
-        std::printf(buffer, args...);
-    }
-    else
-    {
-        std::sprintf(buffer, "%s\n", message);
-        std::printf(buffer, args...);
+        sprintf(buffer, message, args...);
+        sprintf(finalBuffer, "%s\n", buffer);
+        OutputDebugStringA(finalBuffer);
     }
 }
