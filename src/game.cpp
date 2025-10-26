@@ -3,12 +3,14 @@
 #include "context.hpp"
 #include "common/string.cpp"
 #include "common/math.cpp"
+#include "entity.hpp"
 #include "geometry.cpp"
 #include "shaders.cpp"
 #include "renderer_dx11.cpp"
 #include "gui.cpp"
 #include "entity.cpp"
 #include "input.cpp"
+#include "common/heap_array.hpp"
 
 #include "imgui.h"
 
@@ -29,7 +31,7 @@ Entity* pushEntity()
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* pushDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderType shader = ShaderType::Basic)
+Entity* pushDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderType shader = ShaderType::Unlit)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
@@ -39,7 +41,7 @@ Entity* pushDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderTyp
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType shader = ShaderType::Basic)
+Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType shader = ShaderType::Unlit)
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
@@ -88,6 +90,30 @@ Entity* pushLight(RenderState& renderState, LightType type)
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
+Entity* pushSkybox(RenderState& render)
+
+{
+    const auto box = pushDrawable(render, GeneratedMesh::Cube, ShaderType::Skybox);
+    box->type |= EntityType::Skybox;
+    return box;
+}
+
+void generateNormalArrows(RenderState& render, Entity& entity)
+{
+    auto& mesh = *entity.drawCommand->mesh;
+    for (size_t i = 0; i < mesh.verticesCount; ++i)
+    {
+        auto vertex = mesh.vertices[i];
+        const auto arrow = pushDrawable(render, "arrow");
+        setParent(*arrow, &entity);
+        const auto worldArrowPos = entity.worldMatrixCache * vec4(vertex.pos, 1.f);
+        setWorldPosition(*arrow, worldArrowPos);
+        setLocalScale(*arrow, 0.05f);
+        setLocalRotation(*arrow, directionToEuler(vertex.normal));
+        setColor(*arrow, vec4(0.7, 0.7, 0.7, 1));
+    }
+}
+
 void onResize(Context& ctx)
 {
     calculateCameraProjection(ctx.entityManager.camera, ctx.render.screenSize, ctx.entityManager.entities);
@@ -118,43 +144,31 @@ void gameInit(Context& ctx)
     ctx.gameState.grid = pushDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
     ctx.gameState.grid->drawCommand->rasterizerState = RasterizerState::Wireframe;
     ctx.gameState.grid->name = strFromLiteral("grid");
+    setColor(*ctx.gameState.grid, vec4(0.5, 0.5, 0.5, 1));
 
-    ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere);
+    ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere, ShaderType::Basic);
     setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
-    ctx.gameState.cube = pushDrawable(ctx.render, GeneratedMesh::Cube);
-    setTexture(*ctx.gameState.cube->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("pepe")));
-    setLocalPosition(*ctx.gameState.cube, vec3(-1.f, 0.f, 0.f));
-
-    ctx.gameState.quad = pushDrawable(ctx.render, GeneratedMesh::Quad);
-    setTexture(*ctx.gameState.quad->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("sonic")));
+    setTexture(*ctx.gameState.sphere->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("earth")));
 
     ctx.gameState.cameraController = {};
     ctx.gameState.cameraController.camera = &ctx.entityManager.camera;
     ctx.gameState.cameraController.speed = 1.f;
     ctx.gameState.cameraController.sensitivity = 5.f;
 
-    ctx.gameState.lightOrigin = pushEntity();
-    ctx.gameState.lightOrigin->name = strFromLiteral("light origin");
-    setLocalPosition(*ctx.gameState.lightOrigin, ctx.gameState.cube->position);
-    ctx.gameState.light = pushLight(ctx.render, LightType::Point);
-    setLocalPosition(*ctx.gameState.light, vec3(-1, 0, 0));
-    setParent(*ctx.gameState.light, ctx.gameState.lightOrigin, true);
+    ctx.gameState.light = pushLight(ctx.render, LightType::Directional);
+    setLocalPosition(*ctx.gameState.light, vec3(-1, 0, -1));
 
     setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
 
-    ctx.gameState.arrow = pushDrawable(ctx.render, "arrow", ShaderType::Unlit);
-    setColor(*ctx.gameState.arrow, vec4(0.5f, 0.5f, 0.5f, 1.f));
-    setParent(*ctx.gameState.arrow, ctx.gameState.sphere);
-    setLocalPosition(*ctx.gameState.arrow, vec3(0, 2, 0));
+    // always keep last
+    // const auto skybox = pushDrawable(ctx.render, GeneratedMesh::Cube, ShaderType::Skybox);
+    // setLocalScale(*skybox, 100.f);
+    // setColor(*skybox, vec4(0.f));
+    //
 
     for (auto& entity : ctx.entityManager.entities)
         if (hasType(entity, EntityType::Drawable))
             updateTransform(entity);
-
-    for (auto& entity : ctx.entityManager.entities)
-        setEntityFlag(entity, ~(EntityFlag::Active));
-
-    setEntityFlag(*ctx.gameState.quad, EntityFlag::Active);
 }
 
 void gamePreHotReload(Context& ctx)
@@ -402,8 +416,7 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     if (hierarchyLevel == 1 && entity.parent != nullptr)
         return;
 
-    const auto hasChildren =
-        find(entity.children, MAX_ENTITY_CHILDREN, [](Entity* child) { return child != nullptr; }) != nullptr;
+    const auto hasChildren = (bool)entity.children;
 
     ImGui::TableNextColumn();
     ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
@@ -415,7 +428,9 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 
     if (hasChildren)
     {
+        ImGui::PushID(&entity);
         const auto open = ImGui::TreeNodeEx(entity.name.data, nodeFlags);
+        ImGui::PopID();
 
         guiEntityContextMenu(entity);
 
@@ -445,7 +460,9 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
     {
         nodeFlags |= ImGuiTreeNodeFlags_Leaf;
         nodeFlags |= ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        ImGui::PushID(&entity);
         ImGui::TreeNodeEx(entity.name.data, nodeFlags);
+        ImGui::PopID();
 
         guiEntityContextMenu(entity);
 
@@ -493,8 +510,10 @@ void onGui(Context& ctx)
 
     if (ctx.gui.selectedEntity)
     {
+        ImGui::Begin("vselenaya");
         ImGui::Text("selected: ");
         guiEntityContents(ctx, *(Entity*)ctx.gui.selectedEntity);
+        ImGui::End();
     }
 
     ImGui::Separator();
@@ -528,9 +547,8 @@ void gameUpdateAndRender(Context& ctx)
 
     const auto speed = 75.f * dt;
     const auto sine = std::sin(time) * dt;
-    addLocalRotation(*ctx.gameState.cube, vec3(0, speed, 0));
-    addLocalRotation(*ctx.gameState.sphere, vec3(speed * 0.7, 0, 0));
-    addLocalPosition(*ctx.gameState.lightOrigin, vec3(sine, 0, 0));
+    addLocalRotation(*ctx.gameState.sphere, vec3(0, speed * 0.5, 0));
+    addLocalPosition(*ctx.gameState.sphere, vec3(0, sine, 0));
 
     if (ctx.render.needsToResize)
     {
@@ -543,8 +561,7 @@ void gameUpdateAndRender(Context& ctx)
     static vec4 clearColor{0, 0, 0, 1};
     renderClearAndResize(ctx.render, clearColor);
     for (const auto& command : ctx.render.drawCommands)
-        if (bool(command.flags & DrawFlag::Active))
-            renderDraw(command);
+        renderDraw(command);
     guiDraw();
     renderPresent();
 

@@ -102,6 +102,7 @@ int main()
 
     loadAssetsByType(AssetType::ObjMesh);
     loadAssetsByType(AssetType::Texture);
+    loadAssetsByType(AssetType::SkyboxTexture);
 
     auto game = loadGameCode();
 

@@ -14,9 +14,10 @@
         "custom geometry loader",
         "depth buffer",
         "dynamic obj loader",
-        "uv & texture struct"
+        "uv & texture struct",
+        "fix sphere geometry"
     ],
-    "current": "fix sphere geometry",
+    "current": "skybox cubemap",
     "todo": [
         "gizmos",
         "gravity physics",

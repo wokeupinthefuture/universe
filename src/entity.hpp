@@ -5,14 +5,13 @@
 
 struct DrawCommand;
 
-static constexpr auto MAX_ENTITY_CHILDREN = 5;
-
 enum class EntityType
 {
     Default = BIT(0),
     Drawable = BIT(1),
     Camera = BIT(2),
-    Light = BIT(3)
+    Light = BIT(3),
+    Skybox = BIT(4),
 };
 
 DEFINE_ENUM_BITWISE_OPERATORS(EntityType)
@@ -34,7 +33,7 @@ struct Entity
 {
     String name;
     Entity* parent;
-    Entity* children[MAX_ENTITY_CHILDREN];
+    HeapArray<Entity*> children;
     EntityFlag flags;
     EntityType type;
 
@@ -83,6 +82,7 @@ void addLocalPosition(Entity& entity, vec3 pos);
 void setLocalRotation(Entity& entity, vec3 euler);
 void addLocalRotation(Entity& entity, vec3 euler);
 void setLocalScale(Entity& entity, vec3 scale);
+void setLocalScale(Entity& entity, float scale);
 
 void setWorldPosition(Entity& entity, vec3 pos);
 void addWorldPosition(Entity& entity, vec3 pos);

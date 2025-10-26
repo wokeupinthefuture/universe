@@ -15,7 +15,8 @@ enum class RasterizerState
 
 enum class DrawFlag
 {
-    Active = BIT(0)
+    Active = BIT(0),
+    DepthWrite = BIT(1)
 };
 
 DEFINE_ENUM_BITWISE_OPERATORS(DrawFlag);
@@ -60,9 +61,9 @@ void createShaderVariables(DrawCommand& command);
 inline DrawCommand* pushDrawCmd(RenderState& state, Mesh* mesh, ShaderType shader = ShaderType::Basic)
 {
     DrawCommand cmd = {};
-    cmd.flags = DrawFlag::Active;
+    cmd.flags = DrawFlag::Active | DrawFlag::DepthWrite;
     cmd.rasterizerState = RasterizerState::Default;
-    cmd.shader = ShaderType::Unlit;  // shader;
+    cmd.shader = shader;
     cmd.mesh = mesh;
     createShaderVariables(cmd);
     return arrayPush(state.drawCommands, cmd);

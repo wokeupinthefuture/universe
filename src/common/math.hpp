@@ -35,6 +35,8 @@ vec3 getRightVector(mat4 rotation);
 quat eulerToQuat(vec3 const& eulerDegrees);
 vec3 quatToEuler(quat const& quat);
 vec3 quatToDirection(quat const& quat, vec3 viewUp = vec3(0, 1, 0));
+quat directionToQuat(vec3 direction, vec3 viewUp = vec3(0, 1, 0));
+vec3 directionToEuler(vec3 direction, vec3 viewUp = vec3(0, 1, 0));
 
 vec3 matrixExtractPosition(mat4 mat);
 vec3 matrixExtractScale(mat4 mat);

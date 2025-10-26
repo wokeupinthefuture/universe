@@ -11,4 +11,5 @@ struct Texture
     u32 height;
     u32 channels;
     size_t gpuTextureId;
+    bool isCubemap;
 };

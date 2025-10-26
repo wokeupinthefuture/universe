@@ -14,7 +14,7 @@ float4 PS_Main(PSInput input) : SV_TARGET
 { 
     float2 uv = input.uv;
     float4 textureSample = diffuseTexture.Sample(texSampler, input.uv);
-    float4 color = textureSample * objectColor + objectColor * 0.1;
+    float4 color = textureSample * objectColor;
     if (all(textureSample == float4(0,0,0,0))) {
         color = float4(1, 0, 1, 1);
     }
@@ -33,10 +33,10 @@ float4 PS_Main(PSInput input) : SV_TARGET
         attenuation = 1.0f / (1.0f + 0.09f * distance + 0.032f * distance * distance);
     }   
 
-    float diffuseFactor = max(dot(float3(1, 0, 0), normalize(lightVec)), 0.0);
+    float diffuseFactor = max(dot(normal, normalize(lightVec)), 0.0);
     float4 diffuseColor = lightColor * diffuseFactor; 
 
-    float4 ambientColor = color * 0.1;
+    float4 ambientColor = color * 0.3;
 
     return float4(((ambientColor + (diffuseColor * attenuation)) * color).xyz, 1.0);
 }

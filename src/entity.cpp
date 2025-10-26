@@ -123,6 +123,15 @@ void addLocalPosition(Entity& entity, vec3 pos)
     setLocalPosition(entity, entity.position + pos);
 }
 
+void setLocalScale(Entity& entity, float scale)
+{
+    scale = std::max(scale, 0.00001f);
+
+    entity.scale = vec3(scale, scale, scale);
+    entity.isWorldMatrixDirty = true;
+    updateTransform(entity);
+}
+
 void setLocalScale(Entity& entity, vec3 scale)
 {
     scale.x = std::max(scale.x, 0.00001f);
@@ -237,10 +246,12 @@ void setWorldScale(Entity& entity, vec3 scale)
 
 static void findEraseChild(Entity& parent, Entity& child)
 {
+    ENSURE(parent.children);
     const auto oldParentChildSlot =
-        findIndex(parent.children, MAX_ENTITY_CHILDREN, [&](auto& otherChild) { return otherChild == &child; });
+        findIndex(parent.children.data, parent.children.capacity, [&](auto& otherChild) { return otherChild == &child; });
     ENSURE(oldParentChildSlot != -1);
     parent.children[oldParentChildSlot] = nullptr;
+    parent.children.size--;
 }
 
 void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
@@ -263,7 +274,11 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
     if (entity.parent && newParent == entity.parent)
         return;
 
-    const auto newChildSlot = findIndex(newParent->children, MAX_ENTITY_CHILDREN, [](auto& child) { return child == nullptr; });
+    if (!newParent->children)
+        arrayInit(newParent->children, 1024, g_context->gameMemory);
+
+    const auto newChildSlot =
+        findIndex(newParent->children.data, newParent->children.capacity, [](auto& child) { return child == nullptr; });
     if (newChildSlot == -1)
         return;
 
@@ -272,6 +287,7 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
 
     entity.parent = &*newParent;
     newParent->children[newChildSlot] = &entity;
+    newParent->children.size++;
 
     if (!keepWorldTransform)
     {

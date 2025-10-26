@@ -21,7 +21,14 @@ enum class ShaderType
 {
     Basic,
     Unlit,
+    Skybox,
     Max
+};
+
+static constexpr const wchar_t* SHADER_PATH[] = {
+    L"resources/shaders/dx11/basic.hlsl",
+    L"resources/shaders/dx11/unlit.hlsl",
+    L"resources/shaders/dx11/cubemap.hlsl",
 };
 
 static constexpr auto MAX_SHADER_VARIABLES = 10;
@@ -66,22 +73,12 @@ static constexpr Variables DEFAULT_VARIABLES = {
     .mvp = {},
     .objectColor = {1.f, 1.f, 1.f, 1.f},
     .lightColor = {1.f, 1.f, 1.f, 1.f},
-    .lightDirection = {0.f, 0.f, 1.f},
+    .lightDirection = {0.f, -0.7f, 1.f},
     ._padding0 = {},
     .lightPosition = {},
     .time = 0.f,
     .lightType = 0,
     ._padding1 = {},
 };
-
-namespace Basic
-{
-static constexpr auto PATH = L"resources/shaders/dx11/basic.hlsl";
-}
-
-namespace Unlit
-{
-static constexpr auto PATH = L"resources/shaders/dx11/unlit.hlsl";
-}
 
 }  // namespace Shaders

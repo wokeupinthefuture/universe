@@ -1,13 +1,5 @@
 #include "geometry.hpp"
 
-static vec3 computeFaceNormal(vec3 v1, vec3 v2, vec3 v3)
-{
-    const auto edge1 = (v2 - v1);
-    const auto edge2 = (v3 - v1);
-    const auto crossProd = cross(edge1, edge2);
-    return length(crossProd) > 0 ? normalize(crossProd) : crossProd;
-}
-
 static Mesh generateSphere(float radius,
     u32 stacks,
     u32 slices,
@@ -27,22 +19,23 @@ static Mesh generateSphere(float radius,
     mesh.id = (size_t)GeneratedMesh::Sphere;
 
     size_t vertexCount = 0;
-    // Generate vertices
-    for (unsigned int i = 0; i <= stacks; ++i)
+    for (u32 i = 0; i <= stacks; ++i)
     {
-        float phi = PI * static_cast<float>(i) / stacks;  // Polar angle (0 to π)
+        float phi = PI * float(i) / stacks;
         float sinPhi = sinf(phi);
         float cosPhi = cosf(phi);
 
-        for (unsigned int j = 0; j <= slices; ++j)
+        for (u32 j = 0; j <= slices; ++j)
         {
-            float theta = 2.0f * PI * static_cast<float>(j) / slices;  // Azimuthal angle (0 to 2π)
+            float theta = 2.0f * PI * float(j) / slices;
             Vertex vertex{};
             vertex.pos = vec3{
                 radius * sinPhi * cosf(theta),  // x
                 radius * cosPhi,                // y
                 radius * sinPhi * sinf(theta)   // z
             };
+            vertex.uv = vec2{(float)j / slices, (float)i / stacks};
+            vertex.normal = normalize(vertex.pos);
             ENSURE(vertexCount < verticesCount);
             outVertices[vertexCount++] = vertex;
         }
@@ -50,40 +43,26 @@ static Mesh generateSphere(float radius,
 
     size_t indexCount = 0;
     // Generate indices
-    for (unsigned int i = 0; i < stacks; ++i)
+    for (u32 i = 0; i < stacks; ++i)
     {
-        for (unsigned int j = 0; j < slices; ++j)
+        for (u32 j = 0; j < slices; ++j)
         {
-            unsigned int first = i * (slices + 1) + j;
-            unsigned int second = first + slices + 1;
+            u32 topLeft = i * (slices + 1) + j;
+            u32 topRight = topLeft + 1;
+            u32 botLeft = (i + 1) * (slices + 1) + j;
+            u32 botRight = botLeft + 1;
 
             // First triangle (clockwise)
-            outIndices[indexCount++] = first;
-            outIndices[indexCount++] = second;
-            outIndices[indexCount++] = first + 1;
+            outIndices[indexCount++] = topLeft;
+            outIndices[indexCount++] = topRight;
+            outIndices[indexCount++] = botLeft;
 
             // Second triangle (clockwise)
-            outIndices[indexCount++] = second;
-            outIndices[indexCount++] = second + 1;
+            outIndices[indexCount++] = topRight;
+            outIndices[indexCount++] = botRight;
             ENSURE(indexCount < indicesCount);
-            outIndices[indexCount++] = first + 1;
+            outIndices[indexCount++] = botLeft;
         }
-    }
-
-    auto faceNormals = arenaAlloc<vec3>(tempMemory, verticesCount * 3);
-
-    for (size_t i = 0; i < verticesCount; ++i)
-    {
-        const auto faceNormal = computeFaceNormal(outVertices[i + 0].pos, outVertices[i + 1].pos, outVertices[i + 2].pos);
-        faceNormals[i] = faceNormal;
-        outVertices[i + 0].normal += faceNormal;
-        outVertices[i + 1].normal += faceNormal;
-        outVertices[i + 2].normal += faceNormal;
-    }
-
-    for (size_t i = 0; i < verticesCount; ++i)
-    {
-        outVertices[i].normal = normalize(outVertices[i].normal);
     }
 
     return mesh;

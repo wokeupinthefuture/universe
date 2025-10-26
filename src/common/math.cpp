@@ -1,4 +1,5 @@
 #include "math.hpp"
+#include "glm/gtc/quaternion.hpp"
 #include "memory.hpp"
 
 #define NOMINMAX
@@ -82,6 +83,16 @@ vec3 quatToDirection(quat const& quat, vec3 viewUp)
 {
     const auto normQuat = normalize(quat);
     return normQuat * viewUp;
+}
+
+quat directionToQuat(vec3 direction, vec3 viewUp)
+{
+    return quatLookAt(direction, viewUp);
+}
+
+vec3 directionToEuler(vec3 direction, vec3 viewUp)
+{
+    return quatToEuler(quatLookAt(direction, viewUp));
 }
 
 vec3 matrixExtractPosition(mat4 mat)

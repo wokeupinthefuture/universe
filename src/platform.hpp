@@ -41,12 +41,14 @@
 static constexpr const char* ASSETS_PATH[] = {
     "resources/models/",
     "resources/textures/",
+    "resources/textures/skybox",
 };
 
 enum class AssetType
 {
     ObjMesh,
     Texture,
+    SkyboxTexture,
     Max
 };
 
