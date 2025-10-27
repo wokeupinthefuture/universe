@@ -15,13 +15,13 @@ static ComPtr<IDXGISwapChain> s_swapChain;
 static ComPtr<ID3D11DeviceContext> s_deviceContext;
 static ComPtr<ID3D11RenderTargetView> s_rtView;
 static ComPtr<ID3D11DepthStencilView> s_dsView;
-static ID3D11DepthStencilState* s_dss;
-static ID3D11DepthStencilState* s_dssNoWrite;
+static ID3D11DepthStencilState* s_depthStencilDefault;
+static ID3D11DepthStencilState* s_depthStencilNoWrite;
 
-static HeapArray<ID3D11Buffer*> s_vertexBuffers;
-static HeapArray<ID3D11Buffer*> s_indexBuffers;
+static Array<ID3D11Buffer*> s_vertexBuffers;
+static Array<ID3D11Buffer*> s_indexBuffers;
 
-static HeapArray<ID3D11ShaderResourceView*> s_textureViews;
+static Array<ID3D11ShaderResourceView*> s_textureViews;
 static ID3D11SamplerState* s_textureSampler;
 static ID3D11SamplerState* s_cubeMapTextureSampler;
 
@@ -69,15 +69,18 @@ Shader shaders[(i32)ShaderType::Max] = {};
 
 ComPtr<ID3D11RasterizerState> rasterizerStates[(i32)RasterizerState::Max] = {};
 
-static ID3DBlob* compileShader(const wchar_t* srcPath, const char* entryPoint, const char* target)
+static ID3DBlob* compileShader(const wchar_t* srcPath, const wchar_t* entryPoint, const char* target)
 {
     ID3DBlob* resultBlob = nullptr;
     ID3DBlob* errorBlob = nullptr;
 
+    char entryPointMB[1024]{};
+    wcstombs(entryPointMB, entryPoint, sizeof(entryPointMB));
+
     const auto hr = D3DCompileFromFile(srcPath,
         nullptr,
         D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        entryPoint,
+        entryPointMB,
         target,
         D3DCOMPILE_DEBUG | D3DCOMPILE_ENABLE_STRICTNESS,
         0,
@@ -86,13 +89,13 @@ static ID3DBlob* compileShader(const wchar_t* srcPath, const char* entryPoint, c
 
     if (FAILED(hr))
     {
-        wprintf(L"shader %hs source path: %ls", target, srcPath);
-        logError("shader %s compile error: %s", target, errorBlob->GetBufferPointer());
+        logErrorW(L"shader %s:%s compilation failed", srcPath, entryPoint);
+        logError("error: %s", errorBlob->GetBufferPointer());
         errorBlob->Release();
     }
     else
     {
-        logInfo("shader %s compile success", target);
+        logInfoW(L"shader %s:%s compilation success", srcPath, entryPoint);
     }
 
     return resultBlob;
@@ -102,9 +105,9 @@ static Shader createShader(const wchar_t* path)
 {
     Shader shader;
 
-    const auto vsBlob = compileShader(path, "VS_Main", "vs_5_0");
+    const auto vsBlob = compileShader(path, L"VS_Main", "vs_5_0");
     defer({ vsBlob->Release(); });
-    const auto psBlob = compileShader(path, "PS_Main", "ps_5_0");
+    const auto psBlob = compileShader(path, L"PS_Main", "ps_5_0");
     defer({ psBlob->Release(); });
 
     ID3D11VertexShader* vs = nullptr;
@@ -137,7 +140,7 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, size_t vertexCou
     bd.CPUAccessFlags = 0;
     bd.MiscFlags = 0;
     bd.StructureByteStride = sizeof(Vertex);
-    bd.ByteWidth = sizeof(Vertex) * vertexCount;
+    bd.ByteWidth = UINT(sizeof(Vertex) * vertexCount);
 
     D3D11_SUBRESOURCE_DATA sd = {};
     sd.pSysMem = vertices;
@@ -156,7 +159,7 @@ static ID3D11Buffer* createIndexBuffer(u32 const* indices, size_t indexCount)
     bd.Usage = D3D11_USAGE_IMMUTABLE;
     bd.CPUAccessFlags = 0;
     bd.MiscFlags = 0;
-    bd.ByteWidth = sizeof(u32) * indexCount;
+    bd.ByteWidth = UINT(sizeof(u32) * indexCount);
 
     D3D11_SUBRESOURCE_DATA sd = {};
     sd.pSysMem = indices;
@@ -195,7 +198,7 @@ static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
     return rasterizerState;
 }
 
-static ID3D11RenderTargetView* createRenderTarget(vec2 size)
+static ComPtr<ID3D11RenderTargetView> createRenderTarget(vec2 size)
 {
     D3D11_VIEWPORT vp{};
     vp.TopLeftX = 0;
@@ -208,16 +211,18 @@ static ID3D11RenderTargetView* createRenderTarget(vec2 size)
 
     ComPtr<ID3D11Resource> backbuffer{};
     HR_ASSERT(s_swapChain->GetBuffer(0, __uuidof(ID3D11Resource), &backbuffer));
-    ID3D11RenderTargetView* view;
+
+    ComPtr<ID3D11RenderTargetView> view;
     HR_ASSERT(s_device->CreateRenderTargetView(backbuffer.Get(), nullptr, &view));
+
     return view;
 }
 
-static ID3D11DepthStencilView* createDepthStencilView(vec2 size)
+static ComPtr<ID3D11DepthStencilView> createDepthStencilView(vec2 size)
 {
     D3D11_TEXTURE2D_DESC textureDesc{};
-    textureDesc.Width = size.x;
-    textureDesc.Height = size.y;
+    textureDesc.Width = (UINT)size.x;
+    textureDesc.Height = (UINT)size.y;
     textureDesc.MipLevels = 1;
     textureDesc.ArraySize = 1;
     textureDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -225,26 +230,26 @@ static ID3D11DepthStencilView* createDepthStencilView(vec2 size)
     textureDesc.Usage = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-    ID3D11Texture2D* texture;
-    HR_ASSERT(s_device->CreateTexture2D(&textureDesc, nullptr, &texture));
+    ComPtr<ID3D11Texture2D> texture;
+    HR_ASSERT(s_device->CreateTexture2D(&textureDesc, nullptr, texture.GetAddressOf()));
 
     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
     dsvDesc.Format = textureDesc.Format;
     dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 
-    ID3D11DepthStencilView* dsView;
-    HR_ASSERT(s_device->CreateDepthStencilView(texture, &dsvDesc, &dsView));
+    ComPtr<ID3D11DepthStencilView> dsView;
+    HR_ASSERT(s_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsView));
 
     return dsView;
 }
 
-static ID3D11DepthStencilState* createDepthStencilState(bool noWrite)
+static ID3D11DepthStencilState* createDepthStencilState(bool depthNoWrite)
 {
     D3D11_DEPTH_STENCIL_DESC dsDesc = {};
 
     dsDesc.DepthEnable = true;
-    dsDesc.DepthWriteMask = noWrite ? D3D11_DEPTH_WRITE_MASK_ZERO : D3D11_DEPTH_WRITE_MASK_ALL;
-    dsDesc.DepthFunc = noWrite ? D3D11_COMPARISON_LESS_EQUAL : D3D11_COMPARISON_LESS;
+    dsDesc.DepthWriteMask = depthNoWrite ? D3D11_DEPTH_WRITE_MASK_ZERO : D3D11_DEPTH_WRITE_MASK_ALL;
+    dsDesc.DepthFunc = depthNoWrite ? D3D11_COMPARISON_LESS_EQUAL : D3D11_COMPARISON_LESS;
 
     dsDesc.StencilEnable = false;
     dsDesc.StencilReadMask = 0xFF;
@@ -291,16 +296,16 @@ static ID3D11ShaderResourceView* createTexture(Texture texture)
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = -1;
+    srvDesc.Texture2D.MipLevels = (UINT)-1;
 
-    ID3D11ShaderResourceView* srv = nullptr;
-    HR_ASSERT(s_device->CreateShaderResourceView(texture2d.Get(), &srvDesc, &srv));
-    s_deviceContext->GenerateMips(srv);
+    ID3D11ShaderResourceView* view = nullptr;
+    HR_ASSERT(s_device->CreateShaderResourceView(texture2d.Get(), &srvDesc, &view));
+    s_deviceContext->GenerateMips(view);
 
-    return srv;
+    return view;
 }
 
-static ID3D11ShaderResourceView* createSkyboxTexture(Texture* textures)
+static ID3D11ShaderResourceView* createCubemapTexture(Array<Texture> textures)
 {
     ENSURE(textures);
 
@@ -312,39 +317,48 @@ static ID3D11ShaderResourceView* createSkyboxTexture(Texture* textures)
     texDesc.Width = sample.width;
     texDesc.Height = sample.height;
     texDesc.MipLevels = 1;
-    texDesc.ArraySize = 6;
+    texDesc.ArraySize = (UINT)textures.size;
     texDesc.Format = format;
     texDesc.SampleDesc.Count = 1;
     texDesc.SampleDesc.Quality = 0;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
-    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     texDesc.CPUAccessFlags = 0;
-    texDesc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    texDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+    D3D11_SUBRESOURCE_DATA textureData[6]{};
+    for (size_t i = 0; i < textures.size; ++i)
+    {
+        ENSURE(textures[i].isCubemap);
+        auto& data = textureData[i];
+        data.pSysMem = textures[i].data;
+        data.SysMemPitch = sample.width * 4;
+        data.SysMemSlicePitch = 0;
+    }
 
     ComPtr<ID3D11Texture2D> texture;
     HR_ASSERT(s_device->CreateTexture2D(&texDesc, nullptr, &texture));
 
-    s_deviceContext->UpdateSubresource(texture.Get(), 0, nullptr, imageData, width * 4, width * height * 4);
-
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = format;
-    srvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-    srvDesc.Texture2D.MipLevels = -1;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
 
-    ID3D11ShaderResourceView* srv = nullptr;
-    HR_ASSERT(s_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv));
-    s_deviceContext->GenerateMips(srv);
+    ID3D11ShaderResourceView* view = nullptr;
+    HR_ASSERT(s_device->CreateShaderResourceView(texture.Get(), &srvDesc, &view));
+    s_deviceContext->GenerateMips(view);
 
-    return srv;
+    return view;
 }
 
-ID3D11SamplerState* createTextureSampler(bool isCubemap)
+static ID3D11SamplerState* createTextureSampler(bool cubemap)
 {
     D3D11_SAMPLER_DESC samplerDesc = {};
 
     samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 
-    if (!isCubemap)
+    if (!cubemap)
     {
         samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
         samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -376,7 +390,21 @@ ID3D11SamplerState* createTextureSampler(bool isCubemap)
     return sampler;
 }
 
-void renderInitResources(RenderState& state, HeapArray<Asset>* assets)
+static void debugListAliveObjects()
+{
+    ENSURE(s_device);
+
+    ID3D11Debug* d3dDebug = nullptr;
+    s_device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3dDebug);
+
+    if (d3dDebug)
+    {
+        d3dDebug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+        d3dDebug->Release();
+    }
+}
+
+void renderInitResources(RenderState& state, Array<Asset>* assets)
 {
     ENSURE(g_context);
 
@@ -392,14 +420,14 @@ void renderInitResources(RenderState& state, HeapArray<Asset>* assets)
         Asset const& asset = meshes[i];
         auto mesh = loadMesh(asset, g_context->gameMemory, g_context->tempMemory);
         mesh.id = i;
-        arrayPush(state.loadedMeshes, mesh);
+        arrayPush(state.meshes, mesh);
     }
 
     const auto textures = assets[(i32)AssetType::Texture];
     for (size_t i = 0; i < textures.size; ++i)
     {
         const auto& asset = textures[i];
-        arrayPush(state.loadedTextures,
+        arrayPush(state.allTextures,
             {.data = (u8*)asset.data,
                 .size = asset.size,
                 .name = asset.name,
@@ -410,20 +438,25 @@ void renderInitResources(RenderState& state, HeapArray<Asset>* assets)
                 .isCubemap = false});
     }
 
-    const auto skybox = assets[(i32)AssetType::SkyboxTexture];
-    for (size_t i = 0; i < 6; ++i)
+    const auto cubemapTextures = assets[(i32)AssetType::CubemapTexture];
+    const auto cubemapsStart = textures.size;
+    for (size_t i = 0; i < cubemapTextures.size; ++i)
     {
-        const auto& asset = skybox[i];
-        arrayPush(state.loadedTextures,
+        const auto id = cubemapsStart + (i / 6);
+        const auto& asset = cubemapTextures[i];
+        arrayPush(state.allTextures,
             {.data = (u8*)asset.data,
                 .size = asset.size,
                 .name = asset.name,
                 .width = asset.textureWidth,
                 .height = asset.textureHeight,
                 .channels = asset.textureChannels,
-                .gpuTextureId = i,
-                .isCubemap = false});
+                .gpuTextureId = id,
+                .isCubemap = true});
     }
+
+    state.spMeshTextures = arraySpan(state.allTextures, 0, textures.size);
+    state.spCubemaps = arraySpan(state.allTextures, cubemapsStart, cubemapTextures.size);
 }
 
 void renderInit(RenderState& state, void* window)
@@ -454,34 +487,39 @@ void renderInit(RenderState& state, void* window)
 
     s_rtView = createRenderTarget(state.screenSize);
     s_dsView = createDepthStencilView(state.screenSize);
-    s_dss = createDepthStencilState(false);
-    s_dssNoWrite = createDepthStencilState(true);
+    s_depthStencilDefault = createDepthStencilState(false);
+    s_depthStencilNoWrite = createDepthStencilState(true);
     s_deviceContext->OMSetRenderTargets(1, s_rtView.GetAddressOf(), s_dsView.Get());
 
     ENSURE(g_context);
-    arrayInit(s_vertexBuffers, (size_t)GeneratedMesh::Max + state.loadedMeshes.size, g_context->gameMemory, "s_vertexBuffers");
+    arrayInit(s_vertexBuffers, (size_t)GeneratedMesh::Max + state.meshes.size, g_context->gameMemory, "s_vertexBuffers");
     arrayInit(s_indexBuffers, (size_t)GeneratedMesh::Max, g_context->gameMemory, "s_indexBuffers");
-    arrayInit(s_textureViews, state.loadedTextures.size, g_context->gameMemory, "s_textureViews");
+    arrayInit(s_textureViews, state.spMeshTextures.size + state.spCubemaps.size / 6, g_context->gameMemory, "s_textureViews");
     for (int i = 0; i < (i32)GeneratedMesh::Max; ++i)
     {
         arrayPush(s_vertexBuffers, createVertexBuffer(state.generatedMeshes[i].vertices, state.generatedMeshes[i].verticesCount));
         arrayPush(s_indexBuffers, createIndexBuffer(state.generatedMeshes[i].indices, state.generatedMeshes[i].indicesCount));
     }
 
-    for (const auto& mesh : state.loadedMeshes)
+    for (const auto& mesh : state.meshes)
     {
         arrayPush(s_vertexBuffers, createVertexBuffer(mesh.vertices, mesh.verticesCount));
     }
 
-    for (auto& texture : state.loadedTextures)
+    for (const auto& texture : state.spMeshTextures)
     {
         arrayPush(s_textureViews, createTexture(texture));
+    }
+
+    for (size_t cubemapIdx = 0; cubemapIdx < (state.spCubemaps.size / 6); ++cubemapIdx)
+    {
+        arrayPush(s_textureViews, createCubemapTexture(arraySpan(state.spCubemaps, cubemapIdx * 6, 6)));
     }
 
     s_textureSampler = createTextureSampler(false);
     s_cubeMapTextureSampler = createTextureSampler(true);
 
-    for (i32 i = 0; i < (i32)ShaderType::Max; ++i)
+    for (size_t i = 0; i < (size_t)ShaderType::Max; ++i)
     {
         shaders[i] = createShader(SHADER_PATH[i]);
     }
@@ -508,10 +546,10 @@ void renderDeinit()
         s_deviceContext.Reset();
     if (s_rtView)
         s_rtView.Reset();
-    if (s_dss)
-        s_dss->Release();
-    if (s_dssNoWrite)
-        s_dssNoWrite->Release();
+    if (s_depthStencilDefault)
+        s_depthStencilDefault->Release();
+    if (s_depthStencilNoWrite)
+        s_depthStencilNoWrite->Release();
     if (s_dsView)
         s_dsView.Reset();
     if (s_swapChain)
@@ -594,16 +632,16 @@ void renderDraw(DrawCommand const& command)
                                                 ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
                                                 : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    for (size_t i = 0; i < MAX_TEXTURE_SLOTS; ++i)
+    for (UINT i = 0; i < MAX_TEXTURE_SLOTS; ++i)
     {
         const auto& texture = command.textures[i];
         if (!texture)
             continue;
 
         if (texture->isCubemap)
-            s_deviceContext->PSSetSamplers(0, 1, &s_cubeMapTextureSampler);
+            s_deviceContext->PSSetSamplers(i, 1, &s_cubeMapTextureSampler);
         else
-            s_deviceContext->PSSetSamplers(0, 1, &s_textureSampler);
+            s_deviceContext->PSSetSamplers(i, 1, &s_textureSampler);
 
         s_deviceContext->PSSetShaderResources(i, 1, &s_textureViews[texture->gpuTextureId]);
     }
@@ -617,11 +655,11 @@ void renderDraw(DrawCommand const& command)
 
     if (bool(command.flags & DrawFlag::DepthWrite))
     {
-        s_deviceContext->OMSetDepthStencilState(s_dss, 0);
+        s_deviceContext->OMSetDepthStencilState(s_depthStencilDefault, 0);
     }
     else
     {
-        s_deviceContext->OMSetDepthStencilState(s_dssNoWrite, 0);
+        s_deviceContext->OMSetDepthStencilState(s_depthStencilNoWrite, 0);
     }
 
     u32 stride = sizeof(Vertex), offset = 0;
@@ -630,11 +668,11 @@ void renderDraw(DrawCommand const& command)
     if (bool(command.mesh->flags & MeshFlag::Indexed))
     {
         s_deviceContext->IASetIndexBuffer(s_indexBuffers[getMeshBufferIndex(*command.mesh)], DXGI_FORMAT_R32_UINT, 0);
-        s_deviceContext->DrawIndexed(command.mesh->indicesCount, 0, 0);
+        s_deviceContext->DrawIndexed((UINT)command.mesh->indicesCount, 0, 0);
     }
     else
     {
-        s_deviceContext->Draw(command.mesh->verticesCount, 0);
+        s_deviceContext->Draw((UINT)command.mesh->verticesCount, 0);
     }
 
     ID3D11ShaderResourceView* textureSlots[]{nullptr, nullptr, nullptr};
@@ -648,15 +686,17 @@ void renderClearAndResize(RenderState& state, glm::vec4 color)
 {
     if (state.needsToResize)
     {
-        s_deviceContext->OMSetRenderTargets(0, 0, nullptr);
         s_rtView.Reset();
         s_dsView.Reset();
-        s_dss->Release();
-        s_dssNoWrite->Release();
+
+        s_deviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+        s_deviceContext->Flush();
+
         HR_ASSERT(s_swapChain->ResizeBuffers(0, (UINT)state.screenSize.x, (UINT)state.screenSize.y, DXGI_FORMAT_UNKNOWN, 0));
         s_rtView = createRenderTarget(state.screenSize);
         s_dsView = createDepthStencilView(state.screenSize);
         s_deviceContext->OMSetRenderTargets(1, s_rtView.GetAddressOf(), s_dsView.Get());
+
         state.needsToResize = false;
     }
 

@@ -1,15 +1,3 @@
-cbuffer Variables : register(b0)
-{
-    float4x4 world;
-    float4x4 mvp;
-    float4 objectColor;
-    float4 lightColor;
-    float3 lightDirection;
-    float3 lightPosition;
-    float time;
-    int lightType;
-}
-
 Texture2D diffuseTexture : register(t0);
 SamplerState texSampler : register(s0);
 

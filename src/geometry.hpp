@@ -9,13 +9,8 @@ struct Vertex
     vec2 uv;
 };
 
-static constexpr String MeshTypeName[] = {strFromLiteral("Triangle"),
-    strFromLiteral("Quad"),
-    strFromLiteral("Cube"),
-    strFromLiteral("Sphere"),
-    strFromLiteral("Grid"),
-    strFromLiteral("Custom"),
-    strFromLiteral("Max")};
+static constexpr String MeshTypeName[] = {
+    strL("Triangle"), strL("Quad"), strL("Cube"), strL("Sphere"), strL("Grid"), strL("Custom"), strL("Max")};
 
 enum class GeneratedMesh
 {

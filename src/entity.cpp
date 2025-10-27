@@ -33,10 +33,16 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
     const auto model = entity.worldMatrixCache;
     const auto view = camera.view;
     const auto projection = camera.perspective;
+
     ENSURE(entity.drawCommand != nullptr);
+
     if (entity.drawCommand->shader == ShaderType::Basic)
         setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
-    setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
+
+    if (hasType(entity, EntityType::Skybox))
+        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view));
+    else
+        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
 }
 
 static void calculateCameraView(Entity& camera)
@@ -47,7 +53,7 @@ static void calculateCameraView(Entity& camera)
     camera.view = lookAtLH(camera.worldPosition, target, up);
 }
 
-void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
+void calculateCameraTransform(Entity& camera, Array<Entity> entities)
 {
     calculateCameraView(camera);
     for (size_t i = 0; i < entities.size; ++i)
@@ -60,7 +66,7 @@ void calculateCameraTransform(Entity& camera, HeapArray<Entity> entities)
     }
 }
 
-void calculateCameraProjection(Entity& camera, vec2 screenSize, HeapArray<Entity> entities)
+void calculateCameraProjection(Entity& camera, vec2 screenSize, Array<Entity> entities)
 {
     camera.aspect = screenSize.x / screenSize.y;
     auto fov = camera.defaultFov;
@@ -381,6 +387,12 @@ void setEntityFlag(Entity& entity, EntityFlag flag)
             continue;
         setEntityFlag(*child, flag);
     }
+}
+
+void setTexture(Entity& entity, size_t slot, Texture& texture)
+{
+    ENSURE(hasType(entity, EntityType::Drawable) && entity.drawCommand && slot < MAX_TEXTURE_SLOTS);
+    entity.drawCommand->textures[slot] = &texture;
 }
 
 vec3 getForwardVector(Entity& entity)

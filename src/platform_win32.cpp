@@ -21,111 +21,111 @@
 namespace Platform
 {
 
-static int resolveKeyMapping(KeyboardKey key)
-{
-    switch (key)
-    {
-        // Alphabetical keys
-        case KeyboardKey::KEY_A: return 'A';
-        case KeyboardKey::KEY_B: return 'B';
-        case KeyboardKey::KEY_C: return 'C';
-        case KeyboardKey::KEY_D: return 'D';
-        case KeyboardKey::KEY_E: return 'E';
-        case KeyboardKey::KEY_F: return 'F';
-        case KeyboardKey::KEY_G: return 'G';
-        case KeyboardKey::KEY_H: return 'H';
-        case KeyboardKey::KEY_I: return 'I';
-        case KeyboardKey::KEY_J: return 'J';
-        case KeyboardKey::KEY_K: return 'K';
-        case KeyboardKey::KEY_L: return 'L';
-        case KeyboardKey::KEY_M: return 'M';
-        case KeyboardKey::KEY_N: return 'N';
-        case KeyboardKey::KEY_O: return 'O';
-        case KeyboardKey::KEY_P: return 'P';
-        case KeyboardKey::KEY_Q: return 'Q';
-        case KeyboardKey::KEY_R: return 'R';
-        case KeyboardKey::KEY_S: return 'S';
-        case KeyboardKey::KEY_T: return 'T';
-        case KeyboardKey::KEY_U: return 'U';
-        case KeyboardKey::KEY_V: return 'V';
-        case KeyboardKey::KEY_W: return 'W';
-        case KeyboardKey::KEY_X: return 'X';
-        case KeyboardKey::KEY_Y: return 'Y';
-        case KeyboardKey::KEY_Z: return 'Z';
-
-        // Numerical keys
-        case KeyboardKey::KEY_0: return '0';
-        case KeyboardKey::KEY_1: return '1';
-        case KeyboardKey::KEY_2: return '2';
-        case KeyboardKey::KEY_3: return '3';
-        case KeyboardKey::KEY_4: return '4';
-        case KeyboardKey::KEY_5: return '5';
-        case KeyboardKey::KEY_6: return '6';
-        case KeyboardKey::KEY_7: return '7';
-        case KeyboardKey::KEY_8: return '8';
-        case KeyboardKey::KEY_9: return '9';
-
-        // Function keys
-        case KeyboardKey::KEY_F1: return VK_F1;
-        case KeyboardKey::KEY_F2: return VK_F2;
-        case KeyboardKey::KEY_F3: return VK_F3;
-        case KeyboardKey::KEY_F4: return VK_F4;
-        case KeyboardKey::KEY_F5: return VK_F5;
-        case KeyboardKey::KEY_F6: return VK_F6;
-        case KeyboardKey::KEY_F7: return VK_F7;
-        case KeyboardKey::KEY_F8: return VK_F8;
-        case KeyboardKey::KEY_F9: return VK_F9;
-        case KeyboardKey::KEY_F10: return VK_F10;
-        case KeyboardKey::KEY_F11: return VK_F11;
-        case KeyboardKey::KEY_F12: return VK_F12;
-
-        // Modifier keys
-        case KeyboardKey::KEY_SHIFT: return VK_SHIFT;
-        case KeyboardKey::KEY_CTRL: return VK_CONTROL;
-        case KeyboardKey::KEY_ALT: return VK_MENU;
-        case KeyboardKey::KEY_META_LEFT: return VK_LWIN;
-        case KeyboardKey::KEY_META_RIGHT: return VK_RWIN;
-        case KeyboardKey::KEY_CAPS_LOCK: return VK_CAPITAL;
-
-        // Navigation keys
-        case KeyboardKey::KEY_UP: return VK_UP;
-        case KeyboardKey::KEY_DOWN: return VK_DOWN;
-        case KeyboardKey::KEY_LEFT: return VK_LEFT;
-        case KeyboardKey::KEY_RIGHT: return VK_RIGHT;
-        case KeyboardKey::KEY_HOME: return VK_HOME;
-        case KeyboardKey::KEY_END: return VK_END;
-        case KeyboardKey::KEY_PAGE_UP: return VK_PRIOR;
-        case KeyboardKey::KEY_PAGE_DOWN: return VK_NEXT;
-
-        // Editing keys
-        case KeyboardKey::KEY_INSERT: return VK_INSERT;
-        case KeyboardKey::KEY_DELETE: return VK_DELETE;
-        case KeyboardKey::KEY_BACKSPACE: return VK_BACK;
-        case KeyboardKey::KEY_ENTER: return VK_RETURN;
-        case KeyboardKey::KEY_TAB: return VK_TAB;
-        case KeyboardKey::KEY_ESCAPE: return VK_ESCAPE;
-        case KeyboardKey::KEY_SPACE: return VK_SPACE;
-
-        // Punctuation and symbol keys
-        case KeyboardKey::KEY_BACKTICK: return VK_OEM_3;
-        case KeyboardKey::KEY_MINUS: return VK_OEM_MINUS;
-        case KeyboardKey::KEY_EQUAL: return VK_OEM_PLUS;
-        case KeyboardKey::KEY_LEFT_BRACKET: return VK_OEM_4;
-        case KeyboardKey::KEY_RIGHT_BRACKET: return VK_OEM_6;
-        case KeyboardKey::KEY_BACKSLASH: return VK_OEM_5;
-        case KeyboardKey::KEY_SEMICOLON: return VK_OEM_1;
-        case KeyboardKey::KEY_QUOTE: return VK_OEM_7;
-        case KeyboardKey::KEY_COMMA: return VK_OEM_COMMA;
-        case KeyboardKey::KEY_PERIOD: return VK_OEM_PERIOD;
-        case KeyboardKey::KEY_SLASH: return VK_OEM_2;
-
-        // Special keys
-        case KeyboardKey::KEY_PRINT_SCREEN: return VK_SNAPSHOT;
-        case KeyboardKey::KEY_PAUSE: return VK_PAUSE;
-
-        default: return 0;
-    }
-}
+// static int resolveKeyMapping(KeyboardKey key)
+// {
+//     switch (key)
+//     {
+//         // Alphabetical keys
+//         case KeyboardKey::KEY_A: return 'A';
+//         case KeyboardKey::KEY_B: return 'B';
+//         case KeyboardKey::KEY_C: return 'C';
+//         case KeyboardKey::KEY_D: return 'D';
+//         case KeyboardKey::KEY_E: return 'E';
+//         case KeyboardKey::KEY_F: return 'F';
+//         case KeyboardKey::KEY_G: return 'G';
+//         case KeyboardKey::KEY_H: return 'H';
+//         case KeyboardKey::KEY_I: return 'I';
+//         case KeyboardKey::KEY_J: return 'J';
+//         case KeyboardKey::KEY_K: return 'K';
+//         case KeyboardKey::KEY_L: return 'L';
+//         case KeyboardKey::KEY_M: return 'M';
+//         case KeyboardKey::KEY_N: return 'N';
+//         case KeyboardKey::KEY_O: return 'O';
+//         case KeyboardKey::KEY_P: return 'P';
+//         case KeyboardKey::KEY_Q: return 'Q';
+//         case KeyboardKey::KEY_R: return 'R';
+//         case KeyboardKey::KEY_S: return 'S';
+//         case KeyboardKey::KEY_T: return 'T';
+//         case KeyboardKey::KEY_U: return 'U';
+//         case KeyboardKey::KEY_V: return 'V';
+//         case KeyboardKey::KEY_W: return 'W';
+//         case KeyboardKey::KEY_X: return 'X';
+//         case KeyboardKey::KEY_Y: return 'Y';
+//         case KeyboardKey::KEY_Z: return 'Z';
+//
+//         // Numerical keys
+//         case KeyboardKey::KEY_0: return '0';
+//         case KeyboardKey::KEY_1: return '1';
+//         case KeyboardKey::KEY_2: return '2';
+//         case KeyboardKey::KEY_3: return '3';
+//         case KeyboardKey::KEY_4: return '4';
+//         case KeyboardKey::KEY_5: return '5';
+//         case KeyboardKey::KEY_6: return '6';
+//         case KeyboardKey::KEY_7: return '7';
+//         case KeyboardKey::KEY_8: return '8';
+//         case KeyboardKey::KEY_9: return '9';
+//
+//         // Function keys
+//         case KeyboardKey::KEY_F1: return VK_F1;
+//         case KeyboardKey::KEY_F2: return VK_F2;
+//         case KeyboardKey::KEY_F3: return VK_F3;
+//         case KeyboardKey::KEY_F4: return VK_F4;
+//         case KeyboardKey::KEY_F5: return VK_F5;
+//         case KeyboardKey::KEY_F6: return VK_F6;
+//         case KeyboardKey::KEY_F7: return VK_F7;
+//         case KeyboardKey::KEY_F8: return VK_F8;
+//         case KeyboardKey::KEY_F9: return VK_F9;
+//         case KeyboardKey::KEY_F10: return VK_F10;
+//         case KeyboardKey::KEY_F11: return VK_F11;
+//         case KeyboardKey::KEY_F12: return VK_F12;
+//
+//         // Modifier keys
+//         case KeyboardKey::KEY_SHIFT: return VK_SHIFT;
+//         case KeyboardKey::KEY_CTRL: return VK_CONTROL;
+//         case KeyboardKey::KEY_ALT: return VK_MENU;
+//         case KeyboardKey::KEY_META_LEFT: return VK_LWIN;
+//         case KeyboardKey::KEY_META_RIGHT: return VK_RWIN;
+//         case KeyboardKey::KEY_CAPS_LOCK: return VK_CAPITAL;
+//
+//         // Navigation keys
+//         case KeyboardKey::KEY_UP: return VK_UP;
+//         case KeyboardKey::KEY_DOWN: return VK_DOWN;
+//         case KeyboardKey::KEY_LEFT: return VK_LEFT;
+//         case KeyboardKey::KEY_RIGHT: return VK_RIGHT;
+//         case KeyboardKey::KEY_HOME: return VK_HOME;
+//         case KeyboardKey::KEY_END: return VK_END;
+//         case KeyboardKey::KEY_PAGE_UP: return VK_PRIOR;
+//         case KeyboardKey::KEY_PAGE_DOWN: return VK_NEXT;
+//
+//         // Editing keys
+//         case KeyboardKey::KEY_INSERT: return VK_INSERT;
+//         case KeyboardKey::KEY_DELETE: return VK_DELETE;
+//         case KeyboardKey::KEY_BACKSPACE: return VK_BACK;
+//         case KeyboardKey::KEY_ENTER: return VK_RETURN;
+//         case KeyboardKey::KEY_TAB: return VK_TAB;
+//         case KeyboardKey::KEY_ESCAPE: return VK_ESCAPE;
+//         case KeyboardKey::KEY_SPACE: return VK_SPACE;
+//
+//         // Punctuation and symbol keys
+//         case KeyboardKey::KEY_BACKTICK: return VK_OEM_3;
+//         case KeyboardKey::KEY_MINUS: return VK_OEM_MINUS;
+//         case KeyboardKey::KEY_EQUAL: return VK_OEM_PLUS;
+//         case KeyboardKey::KEY_LEFT_BRACKET: return VK_OEM_4;
+//         case KeyboardKey::KEY_RIGHT_BRACKET: return VK_OEM_6;
+//         case KeyboardKey::KEY_BACKSLASH: return VK_OEM_5;
+//         case KeyboardKey::KEY_SEMICOLON: return VK_OEM_1;
+//         case KeyboardKey::KEY_QUOTE: return VK_OEM_7;
+//         case KeyboardKey::KEY_COMMA: return VK_OEM_COMMA;
+//         case KeyboardKey::KEY_PERIOD: return VK_OEM_PERIOD;
+//         case KeyboardKey::KEY_SLASH: return VK_OEM_2;
+//
+//         // Special keys
+//         case KeyboardKey::KEY_PRINT_SCREEN: return VK_SNAPSHOT;
+//         case KeyboardKey::KEY_PAUSE: return VK_PAUSE;
+//
+//         default: return 0;
+//     }
+// }
 
 static KeyboardKey translateKeyMapping(int vkKey)
 {
@@ -383,13 +383,13 @@ Window openWindow(int width, int height, const char* name)
     static constexpr auto offset = 250;
     vec2 windowPos = {(screenSize.x * 0.5f * (isSecondMonitor ? 1 : -1)) - windowSize.x * 0.5f - offset,
         screenSize.y * 0.5 - windowSize.y * 0.5f};
-    SetWindowPos(hwnd, HWND_TOP, windowPos.x, windowPos.y, width, height, SWP_SHOWWINDOW);
+    SetWindowPos(hwnd, HWND_TOP, (int)windowPos.x, (int)windowPos.y, width, height, SWP_SHOWWINDOW);
     const auto consoleHwnd = GetConsoleWindow();
     SetWindowPos(consoleHwnd,
         HWND_BOTTOM,
-        windowPos.x + windowSize.x,
-        windowPos.y,
-        windowSize.x * 0.5 - offset * 0.5,
+        (int)windowPos.x + (int)windowSize.x,
+        (int)windowPos.y,
+        (int)(windowSize.x * 0.5f - (float)offset * 0.5f),
         height,
         SWP_SHOWWINDOW);
 
@@ -485,9 +485,9 @@ static String cloneNameFromPath(const char* path, Arena& cloneMemory, Arena& tem
 {
     const auto sPath = strClone(path, tempMemory);
 
-    const auto nameWithExt = strFindReverse(sPath, strFromLiteral("\\"), false, 1);
+    const auto nameWithExt = strFindReverse(sPath, strL("\\"), false, 1);
     ENSURE(nameWithExt);
-    const auto ext = strFind(nameWithExt, strFromLiteral("."), false);
+    const auto ext = strFind(nameWithExt, strL("."), false);
     ENSURE(ext);
 
     String name;
@@ -531,6 +531,7 @@ Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena&
 
             break;
         }
+        case AssetType::CubemapTexture: [[fallthrough]];
         case AssetType::Texture:
         {
             i32 w{}, h{}, channels{};

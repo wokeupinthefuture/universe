@@ -28,7 +28,7 @@ enum class ShaderType
 static constexpr const wchar_t* SHADER_PATH[] = {
     L"resources/shaders/dx11/basic.hlsl",
     L"resources/shaders/dx11/unlit.hlsl",
-    L"resources/shaders/dx11/cubemap.hlsl",
+    L"resources/shaders/dx11/skybox.hlsl",
 };
 
 static constexpr auto MAX_SHADER_VARIABLES = 10;

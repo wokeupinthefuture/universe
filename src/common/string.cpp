@@ -1,6 +1,5 @@
 #include "string.hpp"
 #include "memory.hpp"
-#include <cassert>
 
 static constexpr auto s_isEqual = [](char a, char b) { return a == b; };
 static constexpr auto s_isNotEqual = [](char a, char b) { return a != b; };
@@ -213,9 +212,9 @@ String strCopy(String const& src, char* dst, size_t dstLength)
     return result;
 }
 
-HeapArray<String> strSplit(String src, String delim, Arena& memory, bool delimInclusive)
+Array<String> strSplit(String src, String delim, Arena& memory, bool delimInclusive)
 {
-    HeapArray<String> result{};
+    Array<String> result{};
 
     if (!src || !delim)
         return result;

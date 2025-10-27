@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/heap_array.hpp"
+#include "common/array.hpp"
 
 struct DrawCommand;
 
@@ -33,7 +33,7 @@ struct Entity
 {
     String name;
     Entity* parent;
-    HeapArray<Entity*> children;
+    Array<Entity*> children;
     EntityFlag flags;
     EntityType type;
 
@@ -72,7 +72,7 @@ struct Entity
 struct EntityManager
 {
     Entity camera;
-    HeapArray<Entity> entities;
+    Array<Entity> entities;
 };
 
 void updateTransform(Entity& entity);

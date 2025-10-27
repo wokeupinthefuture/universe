@@ -13,14 +13,14 @@
         requires std::is_trivial_v<t1> && std::is_trivial_v<t2>
 
 TRIVIAL_TEMPLATE_T(T)
-struct HeapArray
+struct Array
 {
     T* data;
     size_t size;
     size_t capacityBytes;
     size_t capacity;
 
-    HeapArray() = default;
+    Array() = default;
 
     T* begin() { return data; }
     T* end() { return data + size; }
@@ -34,7 +34,7 @@ struct HeapArray
 };
 
 TRIVIAL_TEMPLATE_T(T)
-void arrayClear(HeapArray<T>& array, const char* tag = "array")
+void arrayClear(Array<T>& array, const char* tag = "array")
 {
     logInfo("CLEARING array %s at 0x%llx, clearing %llu bytes to 0x%llx",
         tag,
@@ -46,7 +46,7 @@ void arrayClear(HeapArray<T>& array, const char* tag = "array")
 }
 
 TRIVIAL_TEMPLATE_T(T)
-void arrayInit(HeapArray<T>& array, size_t capacity, Arena& arena, const char* tag = "array")
+void arrayInit(Array<T>& array, size_t capacity, Arena& arena, const char* tag = "array")
 {
     array.capacity = capacity;
     array.capacityBytes = array.capacity * sizeof(T);
@@ -56,7 +56,7 @@ void arrayInit(HeapArray<T>& array, size_t capacity, Arena& arena, const char* t
 }
 
 TRIVIAL_TEMPLATE_T(T)
-T* arrayPush(HeapArray<T>& array, T value)
+T* arrayPush(Array<T>& array, T value)
 {
     assert(array.size < array.capacity);
     array.data[array.size++] = value;
@@ -64,7 +64,7 @@ T* arrayPush(HeapArray<T>& array, T value)
 }
 
 TRIVIAL_TEMPLATE_T(T)
-void arrayPop(HeapArray<T>& array)
+void arrayPop(Array<T>& array)
 {
     if (array.size == 0)
         return;
@@ -74,13 +74,22 @@ void arrayPop(HeapArray<T>& array)
 }
 
 TRIVIAL_TEMPLATE_T(T)
-T* arrayFirst(HeapArray<T> array)
+T* arrayFirst(Array<T> array)
 {
     return array.data;
 }
 
 TRIVIAL_TEMPLATE_T(T)
-T* arrayLast(HeapArray<T> array)
+T* arrayLast(Array<T> array)
 {
     return array.data + array.size - 1;
+}
+
+TRIVIAL_TEMPLATE_T(T)
+Array<T> arraySpan(Array<T> from, size_t begin, size_t size)
+{
+    Array<T> result;
+    result.data = from.data + begin;
+    result.size = size;
+    return result;
 }

@@ -5,19 +5,20 @@
 #include "common/math.cpp"
 #include "entity.hpp"
 #include "geometry.cpp"
+#include "renderer.hpp"
 #include "shaders.cpp"
 #include "renderer_dx11.cpp"
 #include "gui.cpp"
 #include "entity.cpp"
 #include "input.cpp"
-#include "common/heap_array.hpp"
+#include "common/array.hpp"
 
 #include "imgui.h"
 
 Entity defaultEntity()
 {
     Entity e{};
-    e.name = strFromLiteral("entity");
+    e.name = strL("entity");
     e.flags = EntityFlag::Active;
     e.scale = vec3(1.f, 1.f, 1.f);
     e.isWorldMatrixDirty = true;
@@ -35,9 +36,10 @@ Entity* pushDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderTyp
 {
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
-    entity.drawCommand = pushDrawCmd(renderState, &renderState.generatedMeshes[(i32)meshType], shader);
-    if (entity.drawCommand->mesh)
-        entity.name = entity.drawCommand->mesh->name;
+
+    entity.drawCommand = pushDrawCmd(renderState, renderState.generatedMeshes[(i32)meshType], shader);
+    entity.name = entity.drawCommand->mesh->name;
+
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
@@ -46,14 +48,8 @@ Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType 
     auto entity = defaultEntity();
     entity.type = EntityType::Drawable;
 
-    const auto mesh = findMeshByName(renderState, strFromNullTerm(meshName));
-    if (mesh == nullptr)
-    {
-        logError("%s mesh not found", meshName);
-        ENSURE(false);
-    }
-    entity.drawCommand = pushDrawCmd(renderState, mesh, shader);
-    entity.name = mesh->name;
+    entity.drawCommand = pushDrawCmd(renderState, renderGetMesh(renderState, strSz(meshName)), shader);
+    entity.name = entity.drawCommand->mesh->name;
 
     return arrayPush(g_context->entityManager.entities, entity);
 }
@@ -63,16 +59,9 @@ Entity* pushLight(RenderState& renderState, LightType type)
     auto entity = defaultEntity();
     entity.type = EntityType::Light | EntityType::Drawable;
 
-    const auto mesh = findMeshByName(renderState, strFromLiteral("bulb"));
-    if (mesh == nullptr)
-    {
-        logError("bulb mesh not found");
-        ENSURE(false);
-    }
+    entity.drawCommand = pushDrawCmd(renderState, renderGetMesh(renderState, strL("bulb")), ShaderType::Unlit);
 
-    entity.drawCommand = pushDrawCmd(renderState, mesh, ShaderType::Unlit);
-
-    entity.name = strFromLiteral("light");
+    entity.name = strL("light");
 
     setLightType(entity, type);
 
@@ -91,10 +80,10 @@ Entity* pushLight(RenderState& renderState, LightType type)
 }
 
 Entity* pushSkybox(RenderState& render)
-
 {
     const auto box = pushDrawable(render, GeneratedMesh::Cube, ShaderType::Skybox);
     box->type |= EntityType::Skybox;
+    setTexture(*box, 0, renderGetCubemap(render, strL("skybox")));
     return box;
 }
 
@@ -129,8 +118,16 @@ void gameInit(Context& ctx)
     renderInit(ctx.render, ctx.platform.window);
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
+    defer({
+        // pushSkybox(ctx.render);
+
+        for (auto& entity : ctx.entityManager.entities)
+            if (hasType(entity, EntityType::Drawable))
+                updateTransform(entity);
+    });
+
     auto camera = defaultEntity();
-    camera.name = strFromLiteral("camera");
+    camera.name = strL("camera");
     camera.type = EntityType::Camera;
     camera.defaultFov = 75.f;
     camera.nearZ = 0.001f;
@@ -143,32 +140,22 @@ void gameInit(Context& ctx)
 
     ctx.gameState.grid = pushDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
     ctx.gameState.grid->drawCommand->rasterizerState = RasterizerState::Wireframe;
-    ctx.gameState.grid->name = strFromLiteral("grid");
+    ctx.gameState.grid->name = strL("grid");
     setColor(*ctx.gameState.grid, vec4(0.5, 0.5, 0.5, 1));
 
-    ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere, ShaderType::Basic);
-    setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
-    setTexture(*ctx.gameState.sphere->drawCommand, 0, *findTextureByName(ctx.render, strFromLiteral("earth")));
+    // ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere, ShaderType::Basic);
+    // setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
+    // setTexture(*ctx.gameState.sphere, 0, renderGetTexture(ctx.render, strL("earth")));
 
     ctx.gameState.cameraController = {};
     ctx.gameState.cameraController.camera = &ctx.entityManager.camera;
     ctx.gameState.cameraController.speed = 1.f;
     ctx.gameState.cameraController.sensitivity = 5.f;
 
-    ctx.gameState.light = pushLight(ctx.render, LightType::Directional);
-    setLocalPosition(*ctx.gameState.light, vec3(-1, 0, -1));
+    // ctx.gameState.light = pushLight(ctx.render, LightType::Directional);
+    // setLocalPosition(*ctx.gameState.light, vec3(-1, 0, -1));
 
     setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
-
-    // always keep last
-    // const auto skybox = pushDrawable(ctx.render, GeneratedMesh::Cube, ShaderType::Skybox);
-    // setLocalScale(*skybox, 100.f);
-    // setColor(*skybox, vec4(0.f));
-    //
-
-    for (auto& entity : ctx.entityManager.entities)
-        if (hasType(entity, EntityType::Drawable))
-            updateTransform(entity);
 }
 
 void gamePreHotReload(Context& ctx)
@@ -547,8 +534,11 @@ void gameUpdateAndRender(Context& ctx)
 
     const auto speed = 75.f * dt;
     const auto sine = std::sin(time) * dt;
-    addLocalRotation(*ctx.gameState.sphere, vec3(0, speed * 0.5, 0));
-    addLocalPosition(*ctx.gameState.sphere, vec3(0, sine, 0));
+    if (ctx.gameState.sphere)
+    {
+        addLocalRotation(*ctx.gameState.sphere, vec3(0, speed * 0.5, 0));
+        addLocalPosition(*ctx.gameState.sphere, vec3(0, sine, 0));
+    }
 
     if (ctx.render.needsToResize)
     {

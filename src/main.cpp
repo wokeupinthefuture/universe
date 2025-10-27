@@ -64,10 +64,14 @@ void unloadGameCode(GameCode& game)
     game.isLoaded = false;
 }
 
-void loadAssetsByType(AssetType type)
+void loadAssetsByType(AssetType type, String name = {})
 {
     static AssetType assetLoadType;
+    static String toRename;
+
     assetLoadType = type;
+    toRename = name;
+
     Platform::forEachFileInDirectory(ASSETS_PATH[(i32)assetLoadType],
         [](const char* fileName)
         {
@@ -75,8 +79,12 @@ void loadAssetsByType(AssetType type)
                 return;
             char filePath[256]{};
             sprintf(filePath, "%s\\%s", ASSETS_PATH[(i32)assetLoadType], fileName);
-            arrayPush(g_context->platform.assets[(i32)assetLoadType],
-                Platform::loadAsset(filePath, assetLoadType, g_context->platformMemory, g_context->tempMemory));
+
+            auto& assets = g_context->platform.assets[(i32)assetLoadType];
+            arrayPush(assets, Platform::loadAsset(filePath, assetLoadType, g_context->platformMemory, g_context->tempMemory));
+
+            if (toRename)
+                arrayLast(assets)->name = toRename;
         });
 }
 
@@ -93,7 +101,7 @@ int main()
     sprintf(gameCodeRealPath, "%s%s", directory, GAME_DLL_NAME);
     sprintf(gameCodeTempPath, "%s%s", directory, GAME_DLL_NAME_TEMP);
 
-    static constexpr vec2 INITIAL_WINDOW_SIZE = vec2(1280, 720);
+    static constexpr auto INITIAL_WINDOW_SIZE = ivec2(1280, 720);
     context.platform.lastScreenSize = INITIAL_WINDOW_SIZE;
     context.platform.window = Platform::openWindow(INITIAL_WINDOW_SIZE.x, INITIAL_WINDOW_SIZE.y, PROJECT_NAME);
     context.platform.dpi = Platform::getDpi();
@@ -102,7 +110,7 @@ int main()
 
     loadAssetsByType(AssetType::ObjMesh);
     loadAssetsByType(AssetType::Texture);
-    loadAssetsByType(AssetType::SkyboxTexture);
+    loadAssetsByType(AssetType::CubemapTexture, strL("skybox"));
 
     auto game = loadGameCode();
 

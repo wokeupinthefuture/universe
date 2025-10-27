@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/heap_array.hpp"
+#include "common/array.hpp"
 
 #define PLATFORM_WIN32 0
 #define PLATFORM_TYPE PLATFORM_WIN32
@@ -41,14 +41,14 @@
 static constexpr const char* ASSETS_PATH[] = {
     "resources/models/",
     "resources/textures/",
-    "resources/textures/skybox",
+    "resources/textures/cubemaps",
 };
 
 enum class AssetType
 {
     ObjMesh,
     Texture,
-    SkyboxTexture,
+    CubemapTexture,
     Max
 };
 
@@ -70,7 +70,7 @@ struct PlatformToGameBuffer
     float dpi;
     vec2 lastScreenSize;
     void* guiWindowEventCallback;
-    HeapArray<Asset> assets[(i32)AssetType::Max];
+    Array<Asset> assets[(i32)AssetType::Max];
 };
 
 namespace Platform

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstring>
-#include "heap_array.hpp"
+#include "array.hpp"
 
 struct String
 {
@@ -53,14 +52,16 @@ String strCopy(String const& src, String& dst);
 String strCopy(String const& src, char* dst, size_t dstLength);
 String strAppend(String const& s1, String const& s2, Arena& memory);
 String strFindUntil(String src, String substr, bool inclusive = true);
-HeapArray<String> strSplit(String src, String delim, Arena& memory, bool delimInclusive = false);
+Array<String> strSplit(String src, String delim, Arena& memory, bool delimInclusive = false);
 
-#define strFromNullTerm(str)                      \
+// from null term
+#define strSz(str)                                \
     String                                        \
     {                                             \
         .data = (char*)str, .length = strlen(str) \
     }
-#define strFromLiteral(str) String{.data = (char*)str, .length = sizeof(str) - 1}
+// from literal
+#define strL(str) String{.data = (char*)str, .length = sizeof(str) - 1}
 
-static constexpr auto STR_WHITESPACE = strFromLiteral(" ");
-static constexpr auto STR_NEWL = strFromLiteral("\n");
+static constexpr auto STR_WHITESPACE = strL(" ");
+static constexpr auto STR_NEWL = strL("\n");

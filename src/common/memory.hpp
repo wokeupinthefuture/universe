@@ -1,10 +1,12 @@
 #pragma once
 
-#include "common.hpp"
+#include <cassert>
+#include <cstdint>
+#include <cstring>
 
 struct Arena
 {
-    u8* buffer;
+    uint8_t* buffer;
     size_t size;
     size_t used;
     size_t prevUsed;
