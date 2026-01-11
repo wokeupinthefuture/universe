@@ -6,17 +6,19 @@
 
 #include "shaders.hpp"
 
-enum class RasterizerState
+enum class Culling
 {
-    Default,
-    Wireframe,
+    Back,
+    Front,
+    None,
     Max
 };
 
 enum class DrawFlag
 {
     Active = BIT(0),
-    DepthWrite = BIT(1)
+    DepthWrite = BIT(1),
+    Wireframe = BIT(2),
 };
 
 DEFINE_ENUM_BITWISE_OPERATORS(DrawFlag);
@@ -25,7 +27,7 @@ static constexpr auto MAX_TEXTURE_SLOTS = 5;
 struct DrawCommand
 {
     DrawFlag flags;
-    RasterizerState rasterizerState;
+    Culling culling;
     Mesh* mesh;
     ShaderType shader;
     ShaderVariable variables[MAX_SHADER_VARIABLES];
@@ -92,9 +94,21 @@ inline DrawCommand* pushDrawCmd(RenderState& state, Mesh& mesh, ShaderType shade
 {
     DrawCommand cmd = {};
     cmd.flags = DrawFlag::Active | DrawFlag::DepthWrite;
-    cmd.rasterizerState = RasterizerState::Default;
+    cmd.culling = Culling::Back;
     cmd.shader = shader;
     cmd.mesh = &mesh;
+
+    if (&mesh == &state.generatedMeshes[(i32)GeneratedMesh::Grid])
+    {
+        cmd.flags |= DrawFlag::Wireframe;
+        cmd.culling = Culling::None;
+    }
+    else if (shader == ShaderType::Skybox)
+    {
+        cmd.culling = Culling::Front;
+        cmd.flags &= ~(DrawFlag::DepthWrite);
+    }
+
     createShaderVariables(cmd);
     return arrayPush(state.drawCommands, cmd);
 }

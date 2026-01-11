@@ -15,12 +15,11 @@
         "depth buffer",
         "dynamic obj loader",
         "uv & texture struct",
-        "fix sphere geometry"
+        "fix sphere geometry",
+        "skybox cubemap"
     ],
-    "current": "skybox cubemap",
+    "current": "celestial base class",
     "todo": [
-        "gizmos",
-        "gravity physics",
         "fancy shaders for a planet/star shape"
     ]
 }

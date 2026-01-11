@@ -556,7 +556,7 @@ Asset loadAsset(const char* path, AssetType type, Arena& permanentMemory, Arena&
     return asset;
 }
 
-void forEachFileInDirectory(const char* directory, void (*callback)(const char*))
+void forEachAssetInDirectory(const char* directory, AssetType type, void (*callback)(const char*, const char*, AssetType))
 {
     const auto isValidFile = [](WIN32_FIND_DATA& ffd)
     {
@@ -573,11 +573,11 @@ void forEachFileInDirectory(const char* directory, void (*callback)(const char*)
         return;
 
     if (isValidFile(ffd))
-        callback(ffd.cFileName);
+        callback(directory, ffd.cFileName, type);
     do
     {
         if (isValidFile(ffd))
-            callback(ffd.cFileName);
+            callback(directory, ffd.cFileName, type);
     } while (FindNextFile(file, &ffd) != 0);
 }
 

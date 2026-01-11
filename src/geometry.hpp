@@ -32,10 +32,8 @@ DEFINE_ENUM_BITWISE_OPERATORS(MeshFlag);
 
 struct Mesh
 {
-    Vertex* vertices;
-    size_t verticesCount;
-    u32* indices;
-    size_t indicesCount;
+    Array<Vertex> vertices;
+    Array<u32> indices;
     MeshFlag flags;
     size_t id;
     String name;

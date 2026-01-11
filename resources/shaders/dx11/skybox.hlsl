@@ -20,12 +20,7 @@ PSInput VS_Main(VSInput input)
 {
     PSInput output;
 
-    matrix view = v_mvp;
-    view[3][0] = 0.0;
-    view[3][1] = 0.0;
-    view[3][2] = 0.0;
-
-    output.clipPos = mul(float4(input.pos, 1.0f), view);
+    output.clipPos = mul(float4(input.pos, 1.0f), v_mvp);
     output.clipPos.z = output.clipPos.w;
 
     output.uv = input.pos;

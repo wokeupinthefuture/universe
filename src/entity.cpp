@@ -32,7 +32,7 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
 {
     const auto model = entity.worldMatrixCache;
     const auto view = camera.view;
-    const auto projection = camera.perspective;
+    const auto projection = camera.projection;
 
     ENSURE(entity.drawCommand != nullptr);
 
@@ -40,9 +40,17 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
         setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
 
     if (hasType(entity, EntityType::Skybox))
-        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view));
+    {
+        auto viewNoTranslation = mat4(view);
+        viewNoTranslation[3][0] = 0;
+        viewNoTranslation[3][1] = 0;
+        viewNoTranslation[3][2] = 0;
+        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * viewNoTranslation));
+    }
     else
+    {
         setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * view * model));
+    }
 }
 
 static void calculateCameraView(Entity& camera)
@@ -73,8 +81,7 @@ void calculateCameraProjection(Entity& camera, vec2 screenSize, Array<Entity> en
     if (camera.aspect < 1.f)
         fov *= 1 / camera.aspect;
     camera.fov = fov;
-    camera.perspective = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
-    calculateCameraTransform(camera, entities);
+    camera.projection = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
 }
 
 void updateTransform(Entity& entity)
@@ -310,9 +317,11 @@ void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform)
 void setColor(Entity& entity, vec4 color)
 {
     ENSURE(g_context);
-    setShaderVariableVec4(*entity.drawCommand, "objectColor", color);
+    setShaderVariableVec4(*entity.drawCommand, "objectColor", vec4(color.r, color.g, color.b, 1.f));
     if (hasType(entity, EntityType::Light))
     {
+        ENSURE(entity.drawCommand);
+        setShaderVariableVec4(*entity.drawCommand, "lightColor", color);
         for (auto& other : g_context->entityManager.entities)
         {
             if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
@@ -379,6 +388,13 @@ void setEntityFlag(Entity& entity, EntityFlag flag)
                 else
                     entity.drawCommand->flags &= ~(DrawFlag::Active);
             }
+
+            if (hasType(entity, EntityType::Light))
+            {
+                auto color = getShaderVariableVec4(*entity.drawCommand, "lightColor");
+                color.a = (float)isSet;
+                setColor(entity, color);
+            }
         });
 
     for (const auto& child : entity.children)
@@ -387,6 +403,16 @@ void setEntityFlag(Entity& entity, EntityFlag flag)
             continue;
         setEntityFlag(*child, flag);
     }
+}
+
+void setActive(Entity& entity, bool active)
+{
+    setEntityFlag(entity, active ? EntityFlag::Active : ~EntityFlag::Active);
+}
+
+bool isActive(Entity& entity)
+{
+    return bool(entity.flags & EntityFlag::Active);
 }
 
 void setTexture(Entity& entity, size_t slot, Texture& texture)

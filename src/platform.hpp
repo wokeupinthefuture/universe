@@ -38,12 +38,6 @@
     } while (0)
 #endif
 
-static constexpr const char* ASSETS_PATH[] = {
-    "resources/models/",
-    "resources/textures/",
-    "resources/textures/cubemaps",
-};
-
 enum class AssetType
 {
     ObjMesh,
@@ -57,7 +51,9 @@ struct Asset
     const u8* data;
     String name;
     size_t size;
+
     AssetType type;
+
     u32 textureWidth;
     u32 textureHeight;
     u32 textureChannels;
@@ -70,6 +66,7 @@ struct PlatformToGameBuffer
     float dpi;
     vec2 lastScreenSize;
     void* guiWindowEventCallback;
+
     Array<Asset> assets[(i32)AssetType::Max];
 };
 
@@ -89,7 +86,7 @@ void getExeDirectory(char* path);
 u64 getFileLastWrittenTime(const char* fileName);
 void copyFile(const char* src, const char* dst);
 
-void forEachFileInDirectory(const char* directory, void (*callback)(const char*));
+void forEachAssetInDirectory(const char* directory, AssetType type, void (*callback)(const char*, const char*, AssetType));
 
 float getDpi();
 

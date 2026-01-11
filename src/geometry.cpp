@@ -1,20 +1,12 @@
 #include "geometry.hpp"
 
-static Mesh generateSphere(float radius,
-    u32 stacks,
-    u32 slices,
-    Vertex* outVertices,
-    size_t verticesCount,
-    u32* outIndices,
-    size_t indicesCount,
-    Arena& tempMemory)
+static Mesh generateSphere(
+    float radius, u32 stacks, u32 slices, Array<Vertex> outVertices, Array<u32> outIndices, Arena& tempMemory)
 {
     Mesh mesh{};
 
     mesh.vertices = outVertices;
-    mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
-    mesh.indicesCount = indicesCount;
     mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
     mesh.id = (size_t)GeneratedMesh::Sphere;
 
@@ -36,7 +28,7 @@ static Mesh generateSphere(float radius,
             };
             vertex.uv = vec2{(float)j / slices, (float)i / stacks};
             vertex.normal = normalize(vertex.pos);
-            ENSURE(vertexCount < verticesCount);
+            ENSURE(vertexCount < outVertices.size);
             outVertices[vertexCount++] = vertex;
         }
     }
@@ -60,7 +52,7 @@ static Mesh generateSphere(float radius,
             // Second triangle (clockwise)
             outIndices[indexCount++] = topRight;
             outIndices[indexCount++] = botRight;
-            ENSURE(indexCount < indicesCount);
+            ENSURE(indexCount < outIndices.size);
             outIndices[indexCount++] = botLeft;
         }
     }
@@ -68,15 +60,12 @@ static Mesh generateSphere(float radius,
     return mesh;
 }
 
-static Mesh generateGrid(
-    i32 gridX, i32 gridY, float spacing, Vertex* outVertices, size_t verticesCount, u32* outIndices, size_t indicesCount)
+static Mesh generateGrid(i32 gridX, i32 gridY, float spacing, Array<Vertex> outVertices, Array<u32> outIndices)
 {
     Mesh mesh{};
 
     mesh.vertices = outVertices;
-    mesh.verticesCount = verticesCount;
     mesh.indices = outIndices;
-    mesh.indicesCount = indicesCount;
     mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
     mesh.id = (size_t)GeneratedMesh::Grid;
 
@@ -128,10 +117,8 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
                 }};
             static u32 INDICES[] = {0, 1, 2};
 
-            mesh.vertices = VERTICES;
-            mesh.verticesCount = ARR_LENGTH(VERTICES);
-            mesh.indices = INDICES;
-            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.vertices = arraySpan(VERTICES, ARR_LENGTH(VERTICES));
+            mesh.indices = arraySpan(INDICES, ARR_LENGTH(INDICES));
             mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Triangle;
 
@@ -154,10 +141,8 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
                 }};
             static u32 INDICES[] = {0, 1, 2, 2, 3, 0};
 
-            mesh.vertices = VERTICES;
-            mesh.verticesCount = ARR_LENGTH(VERTICES);
-            mesh.indices = INDICES;
-            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.vertices = arraySpan(VERTICES, ARR_LENGTH(VERTICES));
+            mesh.indices = arraySpan(INDICES, ARR_LENGTH(INDICES));
             mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Quad;
 
@@ -241,10 +226,8 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
                 23  // Bottom
             };
 
-            mesh.vertices = VERTICES;
-            mesh.verticesCount = ARR_LENGTH(VERTICES);
-            mesh.indices = INDICES;
-            mesh.indicesCount = ARR_LENGTH(INDICES);
+            mesh.vertices = arraySpan(VERTICES, ARR_LENGTH(VERTICES));
+            mesh.indices = arraySpan(INDICES, ARR_LENGTH(INDICES));
             mesh.flags |= MeshFlag::Indexed | MeshFlag::Generated;
             mesh.id = (size_t)GeneratedMesh::Cube;
 
@@ -262,10 +245,8 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
             mesh = generateSphere(SPHERE_RADIUS,
                 SPHERE_STACKS,
                 SPHERE_SLICES,
-                VERTICES,
-                ARR_LENGTH(VERTICES),
-                INDICES,
-                ARR_LENGTH(INDICES),
+                arraySpan(VERTICES, ARR_LENGTH(VERTICES)),
+                arraySpan(INDICES, ARR_LENGTH(INDICES)),
                 tempMemory);
 
             break;
@@ -279,7 +260,8 @@ Mesh generateMesh(GeneratedMesh type, Arena& tempMemory)
             static Vertex VERTICES[GRID_X * GRID_Y] = {};
             static u32 INDICES[GRID_X * GRID_Y * 4] = {};
 
-            mesh = generateGrid(GRID_X, GRID_Y, GRID_SPACING, VERTICES, ARR_LENGTH(VERTICES), INDICES, ARR_LENGTH(INDICES));
+            mesh = generateGrid(
+                GRID_X, GRID_Y, GRID_SPACING, arraySpan(VERTICES, ARR_LENGTH(VERTICES)), arraySpan(INDICES, ARR_LENGTH(INDICES)));
 
             break;
         }
@@ -472,8 +454,7 @@ Mesh loadMesh(Asset const& asset, Arena& permanentMemory, Arena& tempMemory)
 
     Mesh mesh{};
 
-    mesh.vertices = vertices;
-    mesh.verticesCount = verticesCount;
+    mesh.vertices = arraySpan(vertices, verticesCount);
     mesh.name = asset.name;
 
     return mesh;

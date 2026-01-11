@@ -22,6 +22,7 @@ float4 PS_Main(PSInput input) : SV_TARGET
     float3 normal = normalize(input.worldNormal);
     float3 lightVec = 0.0f;
     float attenuation = 1.f;
+    const float luminosity = 0.1f;
 
     if (v_lightType == 0)
     {
@@ -30,8 +31,8 @@ float4 PS_Main(PSInput input) : SV_TARGET
     else if (v_lightType == 1)
     {
         lightVec = v_lightPosition - input.worldPos.xyz;
-        float distance = length(lightVec);
-        attenuation = 1.0f / (1.0f + 0.09f * distance + 0.032f * distance * distance);
+        float distance = length(lightVec) * luminosity;
+        attenuation = 1.f / (1.f + 0.09f * distance + 0.032f * distance * distance);
     }   
 
     float diffuseFactor = max(dot(normal, normalize(lightVec)), 0.0);
@@ -39,6 +40,6 @@ float4 PS_Main(PSInput input) : SV_TARGET
 
     float4 ambientColor = color * 0.3;
 
-    return float4(((ambientColor + (diffuseColor * attenuation)) * color).xyz, 1.0);
+    return float4(((ambientColor + (diffuseColor * attenuation)) * color).xyz, color.a);
 }
 

@@ -3,8 +3,6 @@
 
 void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
 {
-    context.timeScale = 1.f;
-    context.dt = 0.016f;
     context.render.needsToResize = true;
 
     arenaInit(context.platformMemory, memorySize);
@@ -17,8 +15,10 @@ void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
     arrayInit(context.entityManager.entities, 3000, context.gameMemory, "entities");
     arrayInit(context.render.meshes, MAX_ASSETS, context.gameMemory, "loaded meshes");
     arrayInit(context.render.allTextures, MAX_ASSETS, context.gameMemory, "loaded textures");
-    for (size_t i = 0; i < (i32)AssetType::Max; ++i)
-        arrayInit(context.platform.assets[i], MAX_ASSETS, context.platformMemory, ASSETS_PATH[i]);
+
+    arrayInit(context.platform.assets[(size_t)AssetType::ObjMesh], MAX_ASSETS, context.platformMemory, "models");
+    arrayInit(context.platform.assets[(size_t)AssetType::Texture], MAX_ASSETS, context.platformMemory, "textures");
+    arrayInit(context.platform.assets[(size_t)AssetType::CubemapTexture], MAX_ASSETS, context.platformMemory, "cubemaps");
 }
 
 void contextHotReload(Context& context)

@@ -64,28 +64,49 @@ void unloadGameCode(GameCode& game)
     game.isLoaded = false;
 }
 
-void loadAssetsByType(AssetType type, String name = {})
+void loadAssetsByType(const char* path, AssetType type, String name = {})
 {
-    static AssetType assetLoadType;
-    static String toRename;
+    static String rename;
+    rename = name;
 
-    assetLoadType = type;
-    toRename = name;
-
-    Platform::forEachFileInDirectory(ASSETS_PATH[(i32)assetLoadType],
-        [](const char* fileName)
+    Platform::forEachAssetInDirectory(path,
+        type,
+        [](const char* directory, const char* fileName, AssetType type)
         {
-            if (assetLoadType == AssetType::ObjMesh && !strstr(fileName, ".obj"))
+            if (type == AssetType::ObjMesh && !strstr(fileName, ".obj"))
                 return;
             char filePath[256]{};
-            sprintf(filePath, "%s\\%s", ASSETS_PATH[(i32)assetLoadType], fileName);
+            sprintf(filePath, "%s\\%s", directory, fileName);
 
-            auto& assets = g_context->platform.assets[(i32)assetLoadType];
-            arrayPush(assets, Platform::loadAsset(filePath, assetLoadType, g_context->platformMemory, g_context->tempMemory));
-
-            if (toRename)
-                arrayLast(assets)->name = toRename;
+            auto& assets = g_context->platform.assets[(size_t)type];
+            arrayPush(assets, Platform::loadAsset(filePath, type, g_context->platformMemory, g_context->tempMemory));
         });
+
+    if (type == AssetType::CubemapTexture)
+    {
+        auto& cubemaps = g_context->platform.assets[(size_t)type];
+        auto px = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "px"; });
+        auto nx = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "px"; });
+        auto py = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "py"; });
+        auto ny = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "ny"; });
+        auto pz = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "pz"; });
+        auto nz = *find(cubemaps.data, cubemaps.size, [](Asset& asset) { return asset.name == "nz"; });
+
+        px.name = rename;
+        nx.name = rename;
+        py.name = rename;
+        ny.name = rename;
+        pz.name = rename;
+        nz.name = rename;
+
+        const auto cubemapIdx = cubemaps.size;
+        cubemaps[cubemapIdx / 6 + 0] = px;
+        cubemaps[cubemapIdx / 6 + 1] = nx;
+        cubemaps[cubemapIdx / 6 + 2] = py;
+        cubemaps[cubemapIdx / 6 + 3] = ny;
+        cubemaps[cubemapIdx / 6 + 4] = pz;
+        cubemaps[cubemapIdx / 6 + 5] = nz;
+    }
 }
 
 int main()
@@ -108,9 +129,9 @@ int main()
     context.render.screenSize = INITIAL_WINDOW_SIZE;
     defer({ Platform::closeWindow(context.platform.window); });
 
-    loadAssetsByType(AssetType::ObjMesh);
-    loadAssetsByType(AssetType::Texture);
-    loadAssetsByType(AssetType::CubemapTexture, strL("skybox"));
+    loadAssetsByType("resources/models/", AssetType::ObjMesh);
+    loadAssetsByType("resources/textures", AssetType::Texture);
+    loadAssetsByType("resources/textures/cubemaps/skybox", AssetType::CubemapTexture, strL("skybox"));
 
     auto game = loadGameCode();
 

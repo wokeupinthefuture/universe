@@ -7,34 +7,9 @@
 #include "input.hpp"
 #include "gui.hpp"
 
-struct CameraController
-{
-    static constexpr auto PITCH_YAW_SMOOTHING = 30.f;
-    static constexpr auto DEFAULT_SPEED = 1.f;
-    Entity* camera;
-    bool isPressed;
-    vec2 pressedPos;
-    float speed;
-    float sensitivity;
-    vec3 pitchYaw;
-    vec3 pitchYawTarget;
-    vec3 pitchYawDelta;
-};
-
-struct GameState
-{
-    Entity* grid;
-    Entity* sphere;
-    CameraController cameraController;
-    Entity* light;
-};
-
 struct Context
 {
-    bool pause;
-    float timeScale;
-    float dt;
-
+    bool isGameLoaded;
     bool wantsToQuit;
     bool wantsToReload;
 
@@ -48,7 +23,7 @@ struct Context
     EntityManager entityManager;
     GuiState gui;
 
-    GameState gameState;
+    void* gameState;
 };
 
 inline Context* g_context;

@@ -1,6 +1,7 @@
 #pragma once
 
 // dx11 defines
+#include "glm/ext/scalar_constants.hpp"
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
@@ -50,6 +51,11 @@ template <typename T>
 int signum(T val)
 {
     return (T(0) < val) - (val < T(0));
+}
+
+inline bool isZero(vec3 v)
+{
+    return v.x == 0.f && v.y == 0.f && v.z == 0.f;
 }
 
 float remap(float source, float sourceFrom, float sourceTo, float targetFrom, float targetTo);

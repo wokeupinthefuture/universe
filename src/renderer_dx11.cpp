@@ -1,4 +1,5 @@
 #include "geometry.hpp"
+#include "platform.hpp"
 #include "renderer.hpp"
 #include "context.hpp"
 
@@ -56,7 +57,7 @@ static ConstantBufferFieldMapping _createFieldMapping(const char* name, size_t o
 #define createFieldMapping(bufferStruct, bufferField, value) \
     _createFieldMapping((#bufferField), offsetof(bufferStruct, bufferField), sizeof(bufferStruct::bufferField), (value))
 
-ConstantBuffer constantBuffer{};
+ConstantBuffer s_constantBuffers{};
 
 struct Shader
 {
@@ -65,9 +66,16 @@ struct Shader
     ComPtr<ID3D11InputLayout> layout;
 };
 
-Shader shaders[(i32)ShaderType::Max] = {};
+Shader s_shaders[(i32)ShaderType::Max] = {};
 
-ComPtr<ID3D11RasterizerState> rasterizerStates[(i32)RasterizerState::Max] = {};
+enum class RasterizerState
+{
+    SolidCullBack,
+    SolidCullFront,
+    WireframeCullNone,
+    Max
+};
+ComPtr<ID3D11RasterizerState> s_rasterizerStates[(size_t)RasterizerState::Max] = {};
 
 static ID3DBlob* compileShader(const wchar_t* srcPath, const wchar_t* entryPoint, const char* target)
 {
@@ -130,7 +138,7 @@ static Shader createShader(const wchar_t* path)
     return shader;
 }
 
-static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, size_t vertexCount)
+static ID3D11Buffer* createVertexBuffer(Array<Vertex> vertices)
 {
     ID3D11Buffer* buffer;
 
@@ -140,17 +148,17 @@ static ID3D11Buffer* createVertexBuffer(Vertex const* vertices, size_t vertexCou
     bd.CPUAccessFlags = 0;
     bd.MiscFlags = 0;
     bd.StructureByteStride = sizeof(Vertex);
-    bd.ByteWidth = UINT(sizeof(Vertex) * vertexCount);
+    bd.ByteWidth = UINT(sizeof(Vertex) * vertices.size);
 
     D3D11_SUBRESOURCE_DATA sd = {};
-    sd.pSysMem = vertices;
+    sd.pSysMem = vertices.data;
 
     HR_ASSERT(s_device->CreateBuffer(&bd, &sd, &buffer));
 
     return buffer;
 }
 
-static ID3D11Buffer* createIndexBuffer(u32 const* indices, size_t indexCount)
+static ID3D11Buffer* createIndexBuffer(Array<u32> indices)
 {
     ID3D11Buffer* buffer;
 
@@ -159,10 +167,10 @@ static ID3D11Buffer* createIndexBuffer(u32 const* indices, size_t indexCount)
     bd.Usage = D3D11_USAGE_IMMUTABLE;
     bd.CPUAccessFlags = 0;
     bd.MiscFlags = 0;
-    bd.ByteWidth = UINT(sizeof(u32) * indexCount);
+    bd.ByteWidth = UINT(sizeof(u32) * indices.size);
 
     D3D11_SUBRESOURCE_DATA sd = {};
-    sd.pSysMem = indices;
+    sd.pSysMem = indices.data;
 
     HR_ASSERT(s_device->CreateBuffer(&bd, &sd, &buffer));
 
@@ -184,11 +192,31 @@ static ID3D11Buffer* createConstantBuffer()
     return buffer;
 }
 
-static ID3D11RasterizerState* createRasterizerState(RasterizerState state)
+static ID3D11RasterizerState* createRasterizerState(bool isWireframe, Culling culling)
 {
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
-    rasterizerDesc.FillMode = state == RasterizerState::Wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
-    rasterizerDesc.CullMode = state == RasterizerState::Wireframe ? D3D11_CULL_NONE : D3D11_CULL_BACK;
+    rasterizerDesc.FillMode = isWireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+
+    switch (culling)
+    {
+        case Culling::Back:
+        {
+            rasterizerDesc.CullMode = D3D11_CULL_BACK;
+            break;
+        }
+        case Culling::Front:
+        {
+            rasterizerDesc.CullMode = D3D11_CULL_FRONT;
+            break;
+        }
+        case Culling::None:
+        {
+            rasterizerDesc.CullMode = D3D11_CULL_NONE;
+            break;
+        }
+        default: LOGIC_ERROR();
+    }
+
     rasterizerDesc.FrontCounterClockwise = FALSE;
     rasterizerDesc.DepthClipEnable = TRUE;
 
@@ -337,17 +365,17 @@ static ID3D11ShaderResourceView* createCubemapTexture(Array<Texture> textures)
     }
 
     ComPtr<ID3D11Texture2D> texture;
-    HR_ASSERT(s_device->CreateTexture2D(&texDesc, nullptr, &texture));
+    HR_ASSERT(s_device->CreateTexture2D(&texDesc, textureData, &texture));
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
-    srvDesc.Texture2D.MipLevels = 1;
-    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.TextureCube.MipLevels = 1;
+    srvDesc.TextureCube.MostDetailedMip = 0;
 
     ID3D11ShaderResourceView* view = nullptr;
     HR_ASSERT(s_device->CreateShaderResourceView(texture.Get(), &srvDesc, &view));
-    s_deviceContext->GenerateMips(view);
+    // s_deviceContext->GenerateMips(view);
 
     return view;
 }
@@ -497,13 +525,13 @@ void renderInit(RenderState& state, void* window)
     arrayInit(s_textureViews, state.spMeshTextures.size + state.spCubemaps.size / 6, g_context->gameMemory, "s_textureViews");
     for (int i = 0; i < (i32)GeneratedMesh::Max; ++i)
     {
-        arrayPush(s_vertexBuffers, createVertexBuffer(state.generatedMeshes[i].vertices, state.generatedMeshes[i].verticesCount));
-        arrayPush(s_indexBuffers, createIndexBuffer(state.generatedMeshes[i].indices, state.generatedMeshes[i].indicesCount));
+        arrayPush(s_vertexBuffers, createVertexBuffer(state.generatedMeshes[i].vertices));
+        arrayPush(s_indexBuffers, createIndexBuffer(state.generatedMeshes[i].indices));
     }
 
     for (const auto& mesh : state.meshes)
     {
-        arrayPush(s_vertexBuffers, createVertexBuffer(mesh.vertices, mesh.verticesCount));
+        arrayPush(s_vertexBuffers, createVertexBuffer(mesh.vertices));
     }
 
     for (const auto& texture : state.spMeshTextures)
@@ -521,10 +549,10 @@ void renderInit(RenderState& state, void* window)
 
     for (size_t i = 0; i < (size_t)ShaderType::Max; ++i)
     {
-        shaders[i] = createShader(SHADER_PATH[i]);
+        s_shaders[i] = createShader(SHADER_PATH[i]);
     }
 
-    constantBuffer = {.buffer = createConstantBuffer(),
+    s_constantBuffers = {.buffer = createConstantBuffer(),
         .mappings = {
             createFieldMapping(Shaders::Variables, mvp, &Shaders::DEFAULT_VARIABLES.mvp),
             createFieldMapping(Shaders::Variables, time, &Shaders::DEFAULT_VARIABLES.time),
@@ -536,8 +564,9 @@ void renderInit(RenderState& state, void* window)
             createFieldMapping(Shaders::Variables, lightType, &Shaders::DEFAULT_VARIABLES.lightType),
         }};
 
-    rasterizerStates[(i32)RasterizerState::Default] = createRasterizerState(RasterizerState::Default);
-    rasterizerStates[(i32)RasterizerState::Wireframe] = createRasterizerState(RasterizerState::Wireframe);
+    s_rasterizerStates[(size_t)RasterizerState::SolidCullBack] = createRasterizerState(false, Culling::Back);
+    s_rasterizerStates[(size_t)RasterizerState::SolidCullFront] = createRasterizerState(false, Culling::Front);
+    s_rasterizerStates[(size_t)RasterizerState::WireframeCullNone] = createRasterizerState(true, Culling::None);
 }
 
 void renderDeinit()
@@ -565,15 +594,16 @@ void renderDeinit()
     arrayClear(s_indexBuffers, "s_indexBuffers");
     arrayClear(s_textureViews, "s_textureViews");
 
-    constantBuffer.buffer.Reset();
+    s_constantBuffers.buffer.Reset();
 
-    for (auto& shader : shaders)
+    for (auto& shader : s_shaders)
     {
         shader.vs.Reset();
         shader.ps.Reset();
         shader.layout.Reset();
     }
-    for (auto& state : rasterizerStates)
+
+    for (auto& state : s_rasterizerStates)
         state.Reset();
 
     if (s_deviceContext)
@@ -588,7 +618,7 @@ static void writeShaderVariables(ShaderType shader, const ShaderVariable* variab
     if (shader >= ShaderType::Max)
         LOGIC_ERROR();
 
-    auto buffer = constantBuffer;
+    auto buffer = s_constantBuffers;
 
     size_t dataSizeBytes = sizeof(Shaders::Variables);
     auto data = (u8*)alloca(dataSizeBytes);
@@ -628,9 +658,10 @@ void renderDraw(DrawCommand const& command)
 
     writeShaderVariables(command.shader, command.variables, MAX_SHADER_VARIABLES);
 
-    s_deviceContext->IASetPrimitiveTopology(command.rasterizerState == RasterizerState::Wireframe
-                                                ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
-                                                : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    s_deviceContext->IASetPrimitiveTopology(
+        bool(command.flags & DrawFlag::Wireframe) ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    s_deviceContext->PSSetSamplers(0, 1, &s_textureSampler);
 
     for (UINT i = 0; i < MAX_TEXTURE_SLOTS; ++i)
     {
@@ -638,20 +669,35 @@ void renderDraw(DrawCommand const& command)
         if (!texture)
             continue;
 
-        if (texture->isCubemap)
-            s_deviceContext->PSSetSamplers(i, 1, &s_cubeMapTextureSampler);
-        else
-            s_deviceContext->PSSetSamplers(i, 1, &s_textureSampler);
-
+        s_deviceContext->PSSetSamplers(i, 1, texture->isCubemap ? &s_textureSampler : &s_cubeMapTextureSampler);
         s_deviceContext->PSSetShaderResources(i, 1, &s_textureViews[texture->gpuTextureId]);
     }
 
-    auto& shader = shaders[(i32)command.shader];
+    auto& shader = s_shaders[(i32)command.shader];
     s_deviceContext->IASetInputLayout(shader.layout.Get());
     s_deviceContext->VSSetShader(shader.vs.Get(), nullptr, 0);
     s_deviceContext->PSSetShader(shader.ps.Get(), nullptr, 0);
 
-    s_deviceContext->RSSetState(rasterizerStates[(i32)command.rasterizerState].Get());
+    switch (command.culling)
+    {
+        case Culling::Back:
+        {
+            s_deviceContext->RSSetState(s_rasterizerStates[(size_t)RasterizerState::SolidCullBack].Get());
+            break;
+        }
+        case Culling::Front:
+        {
+            s_deviceContext->RSSetState(s_rasterizerStates[(size_t)RasterizerState::SolidCullFront].Get());
+            break;
+        }
+        case Culling::None:
+        {
+            ENSURE(bool(command.flags & DrawFlag::Wireframe));
+            s_deviceContext->RSSetState(s_rasterizerStates[(size_t)RasterizerState::WireframeCullNone].Get());
+            break;
+        }
+        default: LOGIC_ERROR();
+    }
 
     if (bool(command.flags & DrawFlag::DepthWrite))
     {
@@ -668,11 +714,11 @@ void renderDraw(DrawCommand const& command)
     if (bool(command.mesh->flags & MeshFlag::Indexed))
     {
         s_deviceContext->IASetIndexBuffer(s_indexBuffers[getMeshBufferIndex(*command.mesh)], DXGI_FORMAT_R32_UINT, 0);
-        s_deviceContext->DrawIndexed((UINT)command.mesh->indicesCount, 0, 0);
+        s_deviceContext->DrawIndexed((UINT)command.mesh->indices.size, 0, 0);
     }
     else
     {
-        s_deviceContext->Draw((UINT)command.mesh->verticesCount, 0);
+        s_deviceContext->Draw((UINT)command.mesh->vertices.size, 0);
     }
 
     ID3D11ShaderResourceView* textureSlots[]{nullptr, nullptr, nullptr};
@@ -713,7 +759,7 @@ void createShaderVariables(DrawCommand& command)
 {
     for (int i = 0; i < MAX_SHADER_VARIABLES; ++i)
     {
-        auto& mapping = constantBuffer.mappings[i];
+        auto& mapping = s_constantBuffers.mappings[i];
         command.variables[i] = {
             .name = mapping.name,
             .value = {},

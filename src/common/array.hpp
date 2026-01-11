@@ -20,8 +20,6 @@ struct Array
     size_t capacityBytes;
     size_t capacity;
 
-    Array() = default;
-
     T* begin() { return data; }
     T* end() { return data + size; }
     const T* begin() const { return data; }
@@ -91,5 +89,18 @@ Array<T> arraySpan(Array<T> from, size_t begin, size_t size)
     Array<T> result;
     result.data = from.data + begin;
     result.size = size;
+    result.capacity = size;
+    result.capacityBytes = size * sizeof(T);
+    return result;
+}
+
+TRIVIAL_TEMPLATE_T(T)
+Array<T> arraySpan(T* data, size_t size)
+{
+    Array<T> result;
+    result.data = data;
+    result.size = size;
+    result.capacity = size;
+    result.capacityBytes = size * sizeof(T);
     return result;
 }

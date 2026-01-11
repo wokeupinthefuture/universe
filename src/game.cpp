@@ -11,9 +11,35 @@
 #include "gui.cpp"
 #include "entity.cpp"
 #include "input.cpp"
-#include "common/array.hpp"
+#include "celestial.hpp"
 
 #include "imgui.h"
+
+struct CameraController
+{
+    static constexpr auto PITCH_YAW_SMOOTHING = 30.f;
+    static constexpr auto DEFAULT_SPEED = 5.f;
+    Entity* camera;
+    bool isPressed;
+    vec2 pressedPos;
+    float speed;
+    float sensitivity;
+    vec3 pitchYaw;
+    vec3 pitchYawTarget;
+    vec3 pitchYawDelta;
+};
+
+struct GameState
+{
+    static constexpr auto DELTA_TIME = 0.016f;
+
+    bool pause;
+    float timeScale;
+
+    Entity* grid;
+    CameraController cameraController;
+    Celestial celestials[(size_t)CelestialType::Max];
+};
 
 Entity defaultEntity()
 {
@@ -54,16 +80,12 @@ Entity* pushDrawable(RenderState& renderState, const char* meshName, ShaderType 
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* pushLight(RenderState& renderState, LightType type)
+void setLightSource(Entity& entity, LightType type)
 {
-    auto entity = defaultEntity();
-    entity.type = EntityType::Light | EntityType::Drawable;
-
-    entity.drawCommand = pushDrawCmd(renderState, renderGetMesh(renderState, strL("bulb")), ShaderType::Unlit);
-
-    entity.name = strL("light");
+    entity.type |= EntityType::Light;
 
     setLightType(entity, type);
+    setColor(entity, vec4(1.f));
 
     if (type == LightType::Directional)
     {
@@ -72,25 +94,46 @@ Entity* pushLight(RenderState& renderState, LightType type)
                 Shaders::DEFAULT_VARIABLES.lightDirection[1],
                 Shaders::DEFAULT_VARIABLES.lightDirection[2]});
     }
-
-    setColor(entity, vec4(1, 1, 1, 1));
-    setLocalScale(entity, vec3(0.5f));
-
-    return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* pushSkybox(RenderState& render)
+Entity* pushSkybox(RenderState& render, String cubemapTextureName)
 {
     const auto box = pushDrawable(render, GeneratedMesh::Cube, ShaderType::Skybox);
     box->type |= EntityType::Skybox;
-    setTexture(*box, 0, renderGetCubemap(render, strL("skybox")));
+    setTexture(*box, 0, renderGetCubemap(render, cubemapTextureName));
+    setColor(*box, vec4(1.f));
     return box;
+}
+
+Celestial pushCelestial(RenderState& render, CelestialType type)
+{
+    const auto& data = CELESTIAL_DATA[(size_t)type];
+    const auto entity =
+        // pushDrawable(render, GeneratedMesh::Sphere, type == CelestialType::Sun ? ShaderType::Unlit : ShaderType::Basic);
+        pushDrawable(render, GeneratedMesh::Sphere, ShaderType::Unlit);
+    setTexture(*entity, 0, renderGetTexture(render, data.name));
+
+    entity->name = data.name;
+
+    setLocalScale(*entity, data.scale);
+
+    if (type == CelestialType::Sun)
+        setLightSource(*entity, LightType::Point);
+
+    Celestial celestial;
+
+    celestial.e = entity;
+    celestial.initialVelocity = vec3(0.f, 0.f, -0.5f);
+    celestial.currentVelocity = celestial.initialVelocity;
+    celestial.mass = data.scale.x;
+
+    return celestial;
 }
 
 void generateNormalArrows(RenderState& render, Entity& entity)
 {
     auto& mesh = *entity.drawCommand->mesh;
-    for (size_t i = 0; i < mesh.verticesCount; ++i)
+    for (size_t i = 0; i < mesh.vertices.size; ++i)
     {
         auto vertex = mesh.vertices[i];
         const auto arrow = pushDrawable(render, "arrow");
@@ -108,9 +151,51 @@ void onResize(Context& ctx)
     calculateCameraProjection(ctx.entityManager.camera, ctx.render.screenSize, ctx.entityManager.entities);
 }
 
+void cameraControllerInit(CameraController& controller, Entity& camera)
+{
+    controller = {};
+    controller.camera = &camera;
+    controller.speed = 1.f;
+    controller.sensitivity = 5.f;
+    controller.pitchYawTarget = controller.camera->euler;
+    controller.pitchYaw = controller.camera->euler;
+}
+
+void finalizeEntities(Context& ctx)
+{
+    const auto lightSource = find(ctx.entityManager.entities.data,
+        ctx.entityManager.entities.size,
+        [](Entity& entity) { return hasType(entity, EntityType::Light); });
+    const auto lightColor = getShaderVariableVec4(*lightSource->drawCommand, "lightColor");
+
+    for (auto& entity : ctx.entityManager.entities)
+    {
+        if (hasType(entity, EntityType::Drawable))
+        {
+            if (entity.drawCommand->shader == ShaderType::Basic)
+            {
+                setShaderVariableVec4(*entity.drawCommand, "lightColor", lightColor);
+                setShaderVariableVec3(*entity.drawCommand, "lightDirection", lightSource->lightDirection);
+                setShaderVariableInt(*entity.drawCommand, "lightType", (i32)lightSource->lightType);
+            }
+
+            updateTransform(entity);
+        }
+    }
+}
+
 void gameInit(Context& ctx)
 {
     logInfo("game init");
+
+    if (!ctx.isGameLoaded)
+    {
+        ctx.gameState = arenaAlloc<GameState>(ctx.platformMemory);
+    }
+    const auto gameState = (GameState*)ctx.gameState;
+
+    if (!ctx.isGameLoaded)
+        gameState->timeScale = 1.f;
 
     g_context = &ctx;
 
@@ -119,43 +204,75 @@ void gameInit(Context& ctx)
     guiInit(&ctx.platform.guiWindowEventCallback, ctx.platform.window, ctx.platform.dpi);
 
     defer({
-        // pushSkybox(ctx.render);
+        if (!ctx.isGameLoaded)
+            cameraControllerInit(gameState->cameraController, ctx.entityManager.camera);
 
-        for (auto& entity : ctx.entityManager.entities)
-            if (hasType(entity, EntityType::Drawable))
-                updateTransform(entity);
+        pushSkybox(ctx.render, strL("skybox"));
+
+        finalizeEntities(ctx);
+
+        ctx.isGameLoaded = true;
     });
 
-    auto camera = defaultEntity();
-    camera.name = strL("camera");
-    camera.type = EntityType::Camera;
-    camera.defaultFov = 75.f;
-    camera.nearZ = 0.001f;
-    camera.farZ = 1000.f;
+    if (!ctx.isGameLoaded)
+    {
+        auto camera = defaultEntity();
+        camera.name = strClone("camera", ctx.platformMemory);
+        camera.type = EntityType::Camera;
+        camera.defaultFov = 75.f;
+        camera.nearZ = 0.001f;
+        camera.farZ = 1000.f;
 
-    setLocalPosition(camera, vec3(0, 0, -5));
-    ctx.entityManager.camera = camera;
+        ctx.entityManager.camera = camera;
+    }
 
     onResize(ctx);
 
-    ctx.gameState.grid = pushDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
-    ctx.gameState.grid->drawCommand->rasterizerState = RasterizerState::Wireframe;
-    ctx.gameState.grid->name = strL("grid");
-    setColor(*ctx.gameState.grid, vec4(0.5, 0.5, 0.5, 1));
+    gameState->grid = pushDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
+    setColor(*gameState->grid, vec4(0.5, 0.5, 0.5, 1));
 
-    // ctx.gameState.sphere = pushDrawable(ctx.render, GeneratedMesh::Sphere, ShaderType::Basic);
-    // setLocalPosition(*ctx.gameState.sphere, vec3(1.f, 0.f, 0.f));
-    // setTexture(*ctx.gameState.sphere, 0, renderGetTexture(ctx.render, strL("earth")));
+    if (!ctx.isGameLoaded)
+    {
+        setLocalPosition(ctx.entityManager.camera, vec3(-45, 34, 23));
+        setLocalRotation(ctx.entityManager.camera, vec3(30, 115, 0));
+    }
 
-    ctx.gameState.cameraController = {};
-    ctx.gameState.cameraController.camera = &ctx.entityManager.camera;
-    ctx.gameState.cameraController.speed = 1.f;
-    ctx.gameState.cameraController.sensitivity = 5.f;
+    vec3 offset = {0, 0, 0};
+    for (size_t type = 0; type < (size_t)CelestialType::Max; ++type)
+    {
+        vec3 offsetByType{};
 
-    // ctx.gameState.light = pushLight(ctx.render, LightType::Directional);
-    // setLocalPosition(*ctx.gameState.light, vec3(-1, 0, -1));
+        const auto celestial = pushCelestial(ctx.render, (CelestialType)type);
 
-    setLocalPosition(ctx.entityManager.camera, vec3(0, 2.5, -7));
+        if ((CelestialType)type == CelestialType::Moon)
+        {
+            offsetByType.x = 2.f;
+            offsetByType.y = 1.f;
+        }
+        else
+        {
+            offset += vec3(10, 0, 0);
+        }
+
+        setLocalPosition(*celestial.e, offset + offsetByType);
+        gameState->celestials[type] = celestial;
+
+        if ((CelestialType)type == CelestialType::Sun)
+        {
+            offset.x += 5.f;
+        }
+    }
+
+    for (auto& c : gameState->celestials)
+        setActive(*c.e, false);
+
+    auto& earth = gameState->celestials[(size_t)CelestialType::Earth];
+    auto& moon = gameState->celestials[(size_t)CelestialType::Moon];
+    setActive(*moon.e, true);
+    setActive(*earth.e, true);
+
+    earth.initialVelocity = {};
+    earth.currentVelocity = {};
 }
 
 void gamePreHotReload(Context& ctx)
@@ -344,10 +461,10 @@ void guiEntityContents(Context& ctx, Entity& entity)
         }
     }
 
-    bool active = bool(entity.flags & EntityFlag::Active);
+    bool active = isActive(entity);
     if (ImGui::Checkbox("active", &active))
     {
-        setEntityFlag(entity, active ? EntityFlag::Active : ~(EntityFlag::Active));
+        setActive(entity, active);
     }
 
     ImGui::PopID();
@@ -467,11 +584,14 @@ void guiEntityHierarchy(Context& ctx, Entity& entity, ImGuiTableFlags flags, u32
 
 void onGui(Context& ctx)
 {
+    const auto gameState = (GameState*)ctx.gameState;
+
+    ImGui::SetNextWindowPos({});
     ImGui::Begin("universe");
 
-    ImGui::Text("pause: %s", ctx.pause ? "true" : "false");
+    ImGui::Text("pause: %s", gameState->pause ? "true" : "false");
     ImGui::SetNextItemWidth(GUI_SLIDER_WIDTH);
-    ImGui::DragFloat("time scale", &ctx.timeScale, 0.1f);
+    ImGui::DragFloat("time scale", &gameState->timeScale, 0.1f);
 
     const auto flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable |
                        ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
@@ -497,28 +617,78 @@ void onGui(Context& ctx)
 
     if (ctx.gui.selectedEntity)
     {
-        ImGui::Begin("vselenaya");
-        ImGui::Text("selected: ");
         guiEntityContents(ctx, *(Entity*)ctx.gui.selectedEntity);
-        ImGui::End();
     }
 
     ImGui::Separator();
 
+    for (auto& c : gameState->celestials)
+    {
+        ImGui::PushID(&c);
+        ImGui::Text("%s", c.e->name.data);
+
+        float& mass = c.mass;
+        vec3& velocity = c.currentVelocity;
+        ImGui::DragFloat("mass", &mass);
+        ImGui::DragFloat3("velocity", &velocity.x);
+
+        ImGui::PopID();
+        ImGui::Separator();
+    }
+
     ImGui::End();
+}
+
+void celestialsUpdate(float dt, GameState* gameState)
+{
+    static constexpr auto ROTATION_SPEED = 1.f;
+    for (const auto& celestial : gameState->celestials)
+    {
+        if (!isActive(*celestial.e))
+            continue;
+
+        addLocalRotation(*celestial.e, vec3(0, ROTATION_SPEED * dt * 50.f, 0));
+    }
+
+    for (auto& celestial : gameState->celestials)
+    {
+        if (!isActive(*celestial.e) || (isZero(celestial.initialVelocity)))
+            continue;
+
+        for (const auto& other : gameState->celestials)
+        {
+            if (&other == &celestial || !isActive(*other.e))
+                continue;
+
+            const auto direction = glm::normalize(celestial.e->worldPosition - other.e->worldPosition);
+            auto distance = glm::distance(celestial.e->worldPosition, other.e->worldPosition);
+            distance = std::max(distance, 3.f);
+            const auto force = G * other.mass / (distance * distance);
+            const auto acceleration = -direction * force;
+            celestial.currentVelocity += acceleration * dt;
+        }
+    }
+
+    for (auto& celestial : gameState->celestials)
+    {
+        addWorldPosition(*celestial.e, celestial.currentVelocity * dt);
+    }
 }
 
 void gameUpdateAndRender(Context& ctx)
 {
-    const auto timeScale = ctx.timeScale * (float)!ctx.pause;
-    const auto dt = ctx.dt * timeScale;
+    const auto gameState = (GameState*)ctx.gameState;
+
+    const auto timeScale = gameState->timeScale;
+    const auto dt = GameState::DELTA_TIME * timeScale;
+    const auto unscaledDt = GameState::DELTA_TIME;
 
     if (wasKeyPressed(KeyboardKey::KEY_SPACE))
-        ctx.pause = !ctx.pause;
+        gameState->pause = !gameState->pause;
     if (wasKeyPressed(KeyboardKey::KEY_Z))
-        ctx.timeScale = std::max(0.f, ctx.timeScale += -1);
+        gameState->timeScale *= 0.5;
     if (wasKeyPressed(KeyboardKey::KEY_X))
-        ctx.timeScale += 1;
+        gameState->timeScale *= 2;
 
     float time = getElapsedTime();
     for (auto& entity : ctx.entityManager.entities)
@@ -530,15 +700,10 @@ void gameUpdateAndRender(Context& ctx)
     if (wasKeyPressed(KeyboardKey::KEY_R))
         ctx.wantsToReload = true;
 
-    cameraControllerUpdate(ctx.dt, ctx.input, ctx.gameState.cameraController);
+    cameraControllerUpdate(unscaledDt, ctx.input, gameState->cameraController);
 
-    const auto speed = 75.f * dt;
-    const auto sine = std::sin(time) * dt;
-    if (ctx.gameState.sphere)
-    {
-        addLocalRotation(*ctx.gameState.sphere, vec3(0, speed * 0.5, 0));
-        addLocalPosition(*ctx.gameState.sphere, vec3(0, sine, 0));
-    }
+    if (!gameState->pause)
+        celestialsUpdate(dt, gameState);
 
     if (ctx.render.needsToResize)
     {

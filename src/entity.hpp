@@ -57,7 +57,7 @@ struct Entity
     float nearZ;
     float farZ;
     mat4 view;
-    mat4 perspective;
+    mat4 projection;
 
     // drawable
     struct DrawCommand* drawCommand;
@@ -91,7 +91,10 @@ void addLocalRotation(Entity& entity, vec3 euler);
 void setWorldScale(Entity& entity, vec3 scale);
 
 void setEntityFlag(Entity& entity, EntityFlag flag);
+void setActive(Entity& entity, bool active);
 void setParent(Entity& entity, Entity* newParent, bool keepWorldTransform = false);
+
+bool isActive(Entity& entity);
 
 void setLightDirection(Entity& light, vec3 direction);
 void setLightType(Entity& light, LightType type);
