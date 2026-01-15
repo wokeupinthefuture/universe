@@ -1,5 +1,33 @@
 # Universe (C++ game)
 
+## Code style
+
+### General
+- C-style modules with structs + free functions; minimal class usage.
+- Global `g_context` for cross-system access.
+- Hot-reload friendly: game code in a DLL and state stored in arenas.
+
+### Naming and layout
+- Types are `PascalCase` (`Context`, `RenderState`, `Entity`).
+- Functions and variables are `camelCase` (`renderInit`, `gameUpdateAndRender`, `drawCommands`).
+- Constants/macros are `UPPER_CASE` (`MAX_SHADER_VARIABLES`, `Megabytes()`).
+
+### Compilation model
+- "Unity build" style: `.cpp` files are included directly in other `.cpp` files (e.g. `main.cpp`, `game.cpp`).
+- Platform-specific code is guarded by `PLATFORM_TYPE` macros.
+
+### Memory and containers
+- Arena allocation is explicit. `arenaAlloc()` and `arrayInit()` are the defaults.
+- Arrays are trivial types only (`std::is_trivial_v`) and do not manage ownership.
+
+### Math and transforms
+- GLM math types (`vec3`, `mat4`, `quat`) are used throughout.
+- Transform updates flow through `updateTransform()`, which recomputes world matrices and camera MVP data.
+
+### Error handling
+- Assertions and runtime checks use `ENSURE`, `LOGIC_ERROR`, and `HR_ASSERT` macros.
+- Logging goes through `logInfo`, `logError`, etc. in `src/common/log.hpp`.
+
 ## Architecture
 
 ### High-level layout
@@ -44,34 +72,6 @@
 ### Input and GUI
 - Win32 message handling writes into `InputState`. Helpers like `isKeyPressed()` read from it.
 - ImGui is initialized in `guiInit()` and integrated into the render loop in `gameUpdateAndRender()`.
-
-## Code style
-
-### General
-- C-style modules with structs + free functions; minimal class usage.
-- Global `g_context` for cross-system access.
-- Hot-reload friendly: game code in a DLL and state stored in arenas.
-
-### Naming and layout
-- Types are `PascalCase` (`Context`, `RenderState`, `Entity`).
-- Functions and variables are `camelCase` (`renderInit`, `gameUpdateAndRender`, `drawCommands`).
-- Constants/macros are `UPPER_CASE` (`MAX_SHADER_VARIABLES`, `Megabytes()`).
-
-### Compilation model
-- "Unity build" style: `.cpp` files are included directly in other `.cpp` files (e.g. `main.cpp`, `game.cpp`).
-- Platform-specific code is guarded by `PLATFORM_TYPE` macros.
-
-### Memory and containers
-- Arena allocation is explicit. `arenaAlloc()` and `arrayInit()` are the defaults.
-- Arrays are trivial types only (`std::is_trivial_v`) and do not manage ownership.
-
-### Math and transforms
-- GLM math types (`vec3`, `mat4`, `quat`) are used throughout.
-- Transform updates flow through `updateTransform()`, which recomputes world matrices and camera MVP data.
-
-### Error handling
-- Assertions and runtime checks use `ENSURE`, `LOGIC_ERROR`, and `HR_ASSERT` macros.
-- Logging goes through `logInfo`, `logError`, etc. in `src/common/log.hpp`.
 
 ## Build
 
