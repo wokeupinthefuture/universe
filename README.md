@@ -73,3 +73,19 @@
 - Assertions and runtime checks use `ENSURE`, `LOGIC_ERROR`, and `HR_ASSERT` macros.
 - Logging goes through `logInfo`, `logError`, etc. in `src/common/log.hpp`.
 
+## Build
+
+This project uses CMake and builds a host executable plus a game DLL.
+
+```powershell
+cmake -S . -B out/build
+cmake --build out/build --config Debug
+```
+
+## Run
+
+Run the host executable so it can hot-reload the game DLL:
+
+```powershell
+.\out\build\Debug\universe.exe
+```
