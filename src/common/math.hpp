@@ -58,7 +58,22 @@ inline bool isZero(vec3 v)
     return v.x == 0.f && v.y == 0.f && v.z == 0.f;
 }
 
+inline vec3 direction(vec3 from, vec3 to)
+{
+    vec3 diff = to - from;
+    if (isZero(diff))
+        return vec3(0.f);
+    return glm::normalize(diff);
+}
+
 float remap(float source, float sourceFrom, float sourceTo, float targetFrom, float targetTo);
 
 const char* vec2ToString(struct Arena& arena, vec2 v);
 const char* vec3ToString(struct Arena& arena, vec3 v);
+
+// screen/world coordinate conversions
+vec2 screenToNdc(vec2 screenPos, vec2 screenSize);
+vec4 ndcToView(vec2 ndc, float depth, mat4 invProjection);
+vec4 viewToWorld(vec4 viewPos, mat4 invView);
+vec3 screenToWorldRay(vec2 screenPos, vec2 screenSize, mat4 invView, mat4 invProjection);
+vec3 screenToWorldPoint(vec2 screenPos, vec2 screenSize, float depth, mat4 invView, mat4 invProjection);

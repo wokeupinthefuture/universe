@@ -5,16 +5,19 @@
 
 struct DrawCommand;
 
-enum class EntityType
+enum class EntityTrait
 {
     Default = BIT(0),
     Drawable = BIT(1),
     Camera = BIT(2),
     Light = BIT(3),
     Skybox = BIT(4),
+    AABB = BIT(5),
+    Creature = BIT(6),
+    Food = BIT(7)
 };
 
-DEFINE_ENUM_BITWISE_OPERATORS(EntityType)
+DEFINE_ENUM_BITWISE_OPERATORS(EntityTrait)
 
 enum class EntityFlag
 {
@@ -29,14 +32,23 @@ enum class LightType
     Point
 };
 
+enum class CameraProjection
+{
+    Perspective,
+    Orthographic
+};
+
 struct Entity
 {
     String name;
+    EntityTrait traits;
+    EntityFlag flags;
+
+    // hierarchy
     Entity* parent;
     Array<Entity*> children;
-    EntityFlag flags;
-    EntityType type;
 
+    // xform
     vec3 position;
     quat rotation;
     vec3 euler;
@@ -50,12 +62,16 @@ struct Entity
     mat4 worldMatrixCache;
     bool isWorldMatrixDirty;
 
+    /////////// TRAITS ///////////
+
     // camera
+    CameraProjection cameraProjection;
     float defaultFov;
     float fov;
     float aspect;
     float nearZ;
     float farZ;
+    float orthoSize;
     mat4 view;
     mat4 projection;
 
@@ -66,6 +82,10 @@ struct Entity
     vec3 lightDirection;
     LightType lightType;
 
+    // game logic
+    float creatureSpeed;
+
+    // gui
     bool guiIsLocal;
 };
 
@@ -107,4 +127,4 @@ vec3 getWorldRightVector(Entity& entity);
 vec3 getWorldUpVector(Entity& entity);
 vec3 getWorldForwardVector(Entity& entity);
 
-bool hasType(Entity const& entity, EntityType type);
+bool entityHasTrait(Entity const& entity, EntityTrait trait);

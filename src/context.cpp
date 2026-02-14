@@ -1,6 +1,17 @@
 #include "context.hpp"
 #include "common/array.hpp"
 
+const i32 MAX_ASSETS = 25;
+const i32 MAX_ENTITIES = 3000;
+const i32 MAX_DRAW_COMMANDS = 3000;
+static void initGameArrays(Context& context)
+{
+    arrayInit(context.render.drawCommands, MAX_DRAW_COMMANDS, context.gameMemory);
+    arrayInit(context.entityManager.entities, MAX_ENTITIES, context.gameMemory);
+    arrayInit(context.render.meshes, MAX_ASSETS, context.gameMemory);
+    arrayInit(context.render.allTextures, MAX_ASSETS, context.gameMemory);
+}
+
 void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
 {
     context.render.needsToResize = true;
@@ -9,16 +20,11 @@ void contextInit(Context& context, size_t memorySize, size_t tempMemorySize)
     arenaInit(context.gameMemory, memorySize);
     arenaInit(context.tempMemory, tempMemorySize);
 
-    static constexpr auto MAX_ASSETS = 25;
+    initGameArrays(context);
 
-    arrayInit(context.render.drawCommands, 2000, context.gameMemory, "draw commands");
-    arrayInit(context.entityManager.entities, 3000, context.gameMemory, "entities");
-    arrayInit(context.render.meshes, MAX_ASSETS, context.gameMemory, "loaded meshes");
-    arrayInit(context.render.allTextures, MAX_ASSETS, context.gameMemory, "loaded textures");
-
-    arrayInit(context.platform.assets[(size_t)AssetType::ObjMesh], MAX_ASSETS, context.platformMemory, "models");
-    arrayInit(context.platform.assets[(size_t)AssetType::Texture], MAX_ASSETS, context.platformMemory, "textures");
-    arrayInit(context.platform.assets[(size_t)AssetType::CubemapTexture], MAX_ASSETS, context.platformMemory, "cubemaps");
+    arrayInit(context.platform.assets[(i32)AssetType::ObjMesh], MAX_ASSETS, context.platformMemory);
+    arrayInit(context.platform.assets[(i32)AssetType::Texture], MAX_ASSETS, context.platformMemory);
+    arrayInit(context.platform.assets[(i32)AssetType::CubemapTexture], MAX_ASSETS, context.platformMemory);
 }
 
 void contextHotReload(Context& context)
@@ -26,10 +32,7 @@ void contextHotReload(Context& context)
     arenaClear(context.gameMemory);
     arenaClear(context.tempMemory);
 
-    arrayInit(context.render.drawCommands, context.render.drawCommands.capacity, context.gameMemory, "draw commands");
-    arrayInit(context.entityManager.entities, context.entityManager.entities.capacity, context.gameMemory, "entities");
-    arrayInit(context.render.meshes, context.render.meshes.capacity, context.gameMemory, "loaded meshes");
-    arrayInit(context.render.allTextures, context.render.allTextures.capacity, context.gameMemory, "loaded textures");
+    initGameArrays(context);
 }
 
 void contextDeinit(Context& context)

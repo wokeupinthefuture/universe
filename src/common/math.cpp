@@ -165,3 +165,40 @@ const char* vec2ToString(Arena& arena, vec2 v)
     sprintf(string, "%f, %f", v.x, v.y);
     return string;
 }
+
+vec2 screenToNdc(vec2 screenPos, vec2 screenSize)
+{
+    return vec2(
+        (2.f * screenPos.x) / screenSize.x - 1.f,
+        1.f - (2.f * screenPos.y) / screenSize.y);
+}
+
+vec4 ndcToView(vec2 ndc, float depth, mat4 invProjection)
+{
+    vec4 clip = vec4(ndc.x, ndc.y, depth, 1.f);
+    vec4 view = invProjection * clip;
+    return view / view.w;
+}
+
+vec4 viewToWorld(vec4 viewPos, mat4 invView)
+{
+    return invView * viewPos;
+}
+
+vec3 screenToWorldRay(vec2 screenPos, vec2 screenSize, mat4 invView, mat4 invProjection)
+{
+    vec2 ndc = screenToNdc(screenPos, screenSize);
+    vec4 viewNear = ndcToView(ndc, 0.f, invProjection);
+    vec4 viewFar = ndcToView(ndc, 1.f, invProjection);
+    vec4 worldNear = viewToWorld(viewNear, invView);
+    vec4 worldFar = viewToWorld(viewFar, invView);
+    return glm::normalize(vec3(worldFar) - vec3(worldNear));
+}
+
+vec3 screenToWorldPoint(vec2 screenPos, vec2 screenSize, float depth, mat4 invView, mat4 invProjection)
+{
+    vec2 ndc = screenToNdc(screenPos, screenSize);
+    vec4 viewPos = ndcToView(ndc, depth, invProjection);
+    vec4 worldPos = viewToWorld(viewPos, invView);
+    return vec3(worldPos);
+}

@@ -39,13 +39,23 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
     if (entity.drawCommand->shader == ShaderType::Basic)
         setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
 
-    if (hasType(entity, EntityType::Skybox))
+    if (entityHasTrait(entity, EntityTrait::Skybox))
     {
         auto viewNoTranslation = mat4(view);
         viewNoTranslation[3][0] = 0;
         viewNoTranslation[3][1] = 0;
         viewNoTranslation[3][2] = 0;
-        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(projection * viewNoTranslation));
+
+        auto skyboxProjection = projection;
+        if (camera.cameraProjection == CameraProjection::Orthographic)
+        {
+            auto fov = camera.defaultFov;
+            if (camera.aspect < 1.f)
+                fov *= 1.f / camera.aspect;
+            skyboxProjection = perspectiveLH_ZO(radians(fov), camera.aspect, 0.01f, 10.f);
+        }
+
+        setShaderVariableMat4(*entity.drawCommand, "mvp", transpose(skyboxProjection * viewNoTranslation));
     }
     else
     {
@@ -67,7 +77,7 @@ void calculateCameraTransform(Entity& camera, Array<Entity> entities)
     for (size_t i = 0; i < entities.size; ++i)
     {
         auto& entity = entities[i];
-        if (hasType(entity, EntityType::Drawable))
+        if (entityHasTrait(entity, EntityTrait::Drawable))
         {
             updateShaderMVP(entity, camera);
         }
@@ -77,11 +87,24 @@ void calculateCameraTransform(Entity& camera, Array<Entity> entities)
 void calculateCameraProjection(Entity& camera, vec2 screenSize, Array<Entity> entities)
 {
     camera.aspect = screenSize.x / screenSize.y;
-    auto fov = camera.defaultFov;
-    if (camera.aspect < 1.f)
-        fov *= 1 / camera.aspect;
-    camera.fov = fov;
-    camera.projection = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
+
+    if (camera.cameraProjection == CameraProjection::Orthographic)
+    {
+        float halfWidth = camera.orthoSize * camera.aspect;
+        float halfHeight = camera.orthoSize;
+        camera.projection = orthoLH_ZO(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.nearZ, camera.farZ);
+    }
+    else
+    {
+        auto fov = camera.defaultFov;
+        if (camera.aspect < 1.f)
+            fov *= 1 / camera.aspect;
+        camera.fov = fov;
+        camera.projection = perspectiveLH(radians(camera.fov), camera.aspect, camera.nearZ, camera.farZ);
+    }
+
+    for (auto& entity : entities)
+        updateTransform(entity);
 }
 
 void updateTransform(Entity& entity)
@@ -89,23 +112,23 @@ void updateTransform(Entity& entity)
     calculateWorldTransform(entity);
 
     ENSURE(g_context != nullptr);
-    if (hasType(entity, EntityType::Camera))
+    if (entityHasTrait(entity, EntityTrait::Camera))
     {
         calculateCameraTransform(entity, g_context->entityManager.entities);
     }
-    else if (hasType(entity, EntityType::Drawable))
+    else if (entityHasTrait(entity, EntityTrait::Drawable))
     {
         updateShaderMVP(entity, g_context->entityManager.camera);
     }
 
-    if (hasType(entity, EntityType::Light))
+    if (entityHasTrait(entity, EntityTrait::Light))
     {
         if (entity.lightType == LightType::Directional)
             return;
 
         for (const auto& drawable : g_context->entityManager.entities)
         {
-            if (hasType(drawable, EntityType::Drawable))
+            if (entityHasTrait(drawable, EntityTrait::Drawable))
             {
                 ENSURE(drawable.drawCommand != nullptr);
                 if (drawable.drawCommand->shader == ShaderType::Basic)
@@ -119,9 +142,9 @@ void updateTransform(Entity& entity)
             updateTransform(*child);
 }
 
-bool hasType(Entity const& entity, EntityType type)
+bool entityHasTrait(Entity const& entity, EntityTrait trait)
 {
-    return bool(entity.type & type);
+    return bool(entity.traits & trait);
 }
 
 void setLocalPosition(Entity& entity, vec3 pos)
@@ -318,13 +341,13 @@ void setColor(Entity& entity, vec4 color)
 {
     ENSURE(g_context);
     setShaderVariableVec4(*entity.drawCommand, "objectColor", vec4(color.r, color.g, color.b, 1.f));
-    if (hasType(entity, EntityType::Light))
+    if (entityHasTrait(entity, EntityTrait::Light))
     {
         ENSURE(entity.drawCommand);
         setShaderVariableVec4(*entity.drawCommand, "lightColor", color);
         for (auto& other : g_context->entityManager.entities)
         {
-            if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+            if (entityHasTrait(other, EntityTrait::Drawable) && other.drawCommand->shader == ShaderType::Basic)
                 setShaderVariableVec4(*other.drawCommand, "lightColor", color);
         }
     }
@@ -333,13 +356,13 @@ void setColor(Entity& entity, vec4 color)
 void setLightType(Entity& light, LightType type)
 {
     ENSURE(g_context);
-    ENSURE(hasType(light, EntityType::Light));
+    ENSURE(entityHasTrait(light, EntityTrait::Light));
 
     light.lightType = type;
 
     for (auto& other : g_context->entityManager.entities)
     {
-        if (hasType(other, EntityType::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+        if (entityHasTrait(other, EntityTrait::Drawable) && other.drawCommand->shader == ShaderType::Basic)
             setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
     }
 }
@@ -347,13 +370,13 @@ void setLightType(Entity& light, LightType type)
 void setLightDirection(Entity& light, vec3 direction)
 {
     ENSURE(g_context);
-    ENSURE(hasType(light, EntityType::Light));
+    ENSURE(entityHasTrait(light, EntityTrait::Light));
 
     light.lightDirection = direction;
 
     for (const auto& entity : g_context->entityManager.entities)
     {
-        if (hasType(entity, EntityType::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
+        if (entityHasTrait(entity, EntityTrait::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
         {
             setShaderVariableVec3(*entity.drawCommand, "lightDirection", light.lightDirection);
         }
@@ -389,7 +412,7 @@ void setEntityFlag(Entity& entity, EntityFlag flag)
                     entity.drawCommand->flags &= ~(DrawFlag::Active);
             }
 
-            if (hasType(entity, EntityType::Light))
+            if (entityHasTrait(entity, EntityTrait::Light))
             {
                 auto color = getShaderVariableVec4(*entity.drawCommand, "lightColor");
                 color.a = (float)isSet;
@@ -417,7 +440,7 @@ bool isActive(Entity& entity)
 
 void setTexture(Entity& entity, size_t slot, Texture& texture)
 {
-    ENSURE(hasType(entity, EntityType::Drawable) && entity.drawCommand && slot < MAX_TEXTURE_SLOTS);
+    ENSURE(entityHasTrait(entity, EntityTrait::Drawable) && entity.drawCommand && slot < MAX_TEXTURE_SLOTS);
     entity.drawCommand->textures[slot] = &texture;
 }
 

@@ -520,9 +520,9 @@ void renderInit(RenderState& state, void* window)
     s_deviceContext->OMSetRenderTargets(1, s_rtView.GetAddressOf(), s_dsView.Get());
 
     ENSURE(g_context);
-    arrayInit(s_vertexBuffers, (size_t)GeneratedMesh::Max + state.meshes.size, g_context->gameMemory, "s_vertexBuffers");
-    arrayInit(s_indexBuffers, (size_t)GeneratedMesh::Max, g_context->gameMemory, "s_indexBuffers");
-    arrayInit(s_textureViews, state.spMeshTextures.size + state.spCubemaps.size / 6, g_context->gameMemory, "s_textureViews");
+    arrayInit(s_vertexBuffers, (size_t)GeneratedMesh::Max + state.meshes.size, g_context->gameMemory);
+    arrayInit(s_indexBuffers, (size_t)GeneratedMesh::Max, g_context->gameMemory);
+    arrayInit(s_textureViews, state.spMeshTextures.size + state.spCubemaps.size / 6, g_context->gameMemory);
     for (int i = 0; i < (i32)GeneratedMesh::Max; ++i)
     {
         arrayPush(s_vertexBuffers, createVertexBuffer(state.generatedMeshes[i].vertices));

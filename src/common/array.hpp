@@ -3,6 +3,11 @@
 #include <cstdio>
 #include <type_traits>
 #include "memory.hpp"
+#include "utils.hpp"
+
+#ifdef DEBUG
+#define ARRAY_MEMORY_DEBUG
+#endif
 
 #define TRIVIAL_TEMPLATE_T(t) \
     template <typename t>     \
@@ -19,6 +24,10 @@ struct Array
     size_t size;
     size_t capacityBytes;
     size_t capacity;
+
+#ifdef ARRAY_MEMORY_DEBUG
+    const char* tag;
+#endif
 
     T* begin() { return data; }
     T* end() { return data + size; }
@@ -43,15 +52,30 @@ void arrayClear(Array<T>& array, const char* tag = "array")
     array.size = 0;
 }
 
+#ifdef ARRAY_MEMORY_DEBUG
 TRIVIAL_TEMPLATE_T(T)
-void arrayInit(Array<T>& array, size_t capacity, Arena& arena, const char* tag = "array")
+void _arrayInit(Array<T>& array, size_t capacity, Arena& arena, const char* tag)
 {
     array.capacity = capacity;
     array.capacityBytes = array.capacity * sizeof(T);
     array.data = (T*)arenaAlloc(arena, array.capacityBytes, alignof(T));
     array.size = 0;
-    logInfo("ARRAY_INIT: %s at 0x%llx", tag, array.data);
+    array.tag = tag;
+    logInfo("arrayInit: %s at 0x%llx", array.tag, array.data);
 }
+
+#define arrayInit(sourceArray, capacity, arena) _arrayInit(sourceArray, capacity, arena, #sourceArray)
+
+#else
+TRIVIAL_TEMPLATE_T(T)
+void arrayInit(Array<T>& array, size_t capacity, Arena& arena)
+{
+    array.capacity = capacity;
+    array.capacityBytes = array.capacity * sizeof(T);
+    array.data = (T*)arenaAlloc(arena, array.capacityBytes, alignof(T));
+    array.size = 0;
+}
+#endif
 
 TRIVIAL_TEMPLATE_T(T)
 T* arrayPush(Array<T>& array, T value)

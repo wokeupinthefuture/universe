@@ -16,6 +16,10 @@ privDefer<F> defer_func(F f)
     return privDefer<F>(f);
 }
 
+#ifndef NDEBUG
+#define DEBUG
+#endif
+
 #define DEFER_1(x, y) x##y
 #define DEFER_2(x, y) DEFER_1(x, y)
 #define DEFER_3(x) DEFER_2(x, __COUNTER__)
