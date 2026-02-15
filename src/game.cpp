@@ -17,6 +17,7 @@
 #include "game/world.hpp"
 
 #include "imgui.h"
+#include <random>
 
 struct CameraController
 {
@@ -28,6 +29,8 @@ struct CameraController
 
     bool isPressed;
     vec2 pressedPos;
+
+    bool isMoving;
 
     float speed;
     float sensitivity;
@@ -50,6 +53,8 @@ struct GameState
     World world;
 };
 
+void simulateCreatures(World& world, float dt);
+
 Entity defaultEntity()
 {
     Entity e{};
@@ -67,23 +72,23 @@ Entity* createEntity()
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* createDrawable(RenderState& renderState, GeneratedMesh meshType, ShaderType shader = ShaderType::Unlit)
+Entity* createDrawable(RenderState& renderState, GeneratedMesh mesh)
 {
     auto entity = defaultEntity();
     entity.traits = EntityTrait::Drawable;
 
-    entity.drawCommand = pushDrawCmd(renderState, renderState.generatedMeshes[(i32)meshType], shader);
+    entity.drawCommand = pushDrawCmd(renderState, renderState.generatedMeshes[(i32)mesh]);
     entity.name = entity.drawCommand->mesh->name;
 
     return arrayPush(g_context->entityManager.entities, entity);
 }
 
-Entity* createDrawable(RenderState& renderState, const char* meshName, ShaderType shader = ShaderType::Unlit)
+Entity* createDrawable(RenderState& renderState, const char* meshName)
 {
     auto entity = defaultEntity();
     entity.traits = EntityTrait::Drawable;
 
-    entity.drawCommand = pushDrawCmd(renderState, renderGetMesh(renderState, strSz(meshName)), shader);
+    entity.drawCommand = pushDrawCmd(renderState, renderGetMesh(renderState, strSz(meshName)));
     entity.name = entity.drawCommand->mesh->name;
 
     return arrayPush(g_context->entityManager.entities, entity);
@@ -91,7 +96,7 @@ Entity* createDrawable(RenderState& renderState, const char* meshName, ShaderTyp
 
 Entity* createLight(RenderState& renderState, LightType type)
 {
-    auto entity = createDrawable(renderState, GeneratedMesh::Cube, ShaderType::Unlit);
+    auto entity = createDrawable(renderState, GeneratedMesh::Cube);
     entity->traits = EntityTrait::Drawable | EntityTrait::Light;
     entity->name = strL("light");
 
@@ -111,13 +116,34 @@ Entity* createLight(RenderState& renderState, LightType type)
     return entity;
 }
 
+Entity* createGrid(RenderState& render)
+{
+    const auto grid = createDrawable(render, GeneratedMesh::Grid);
+
+    auto& cmd = *grid->drawCommand;
+    cmd.drawFlags |= DrawFlag::Wireframe;
+    cmd.culling = Culling::None;
+
+    setColor(*grid, vec4(0.5, 0.5, 0.5, 1));
+
+    return grid;
+}
+
 Entity* createSkybox(RenderState& render, String cubemapTextureName)
 {
-    const auto box = createDrawable(render, GeneratedMesh::Cube, ShaderType::Skybox);
+    const auto box = createDrawable(render, GeneratedMesh::Cube);
+
+    auto& cmd = *box->drawCommand;
+    cmd.shaderType = ShaderType::Skybox;
+    cmd.shaderTraits &= ShaderTrait::Textured;
+    cmd.culling = Culling::Front;
+    cmd.drawFlags &= ~(DrawFlag::DepthWrite);
+
     box->name = strL("skybox");
     box->traits |= EntityTrait::Skybox;
     setTexture(*box, 0, renderGetCubemap(render, cubemapTextureName));
     setColor(*box, vec4(1.f));
+
     return box;
 }
 
@@ -182,7 +208,7 @@ void finalizeEntities(Context& ctx)
     {
         if (entityHasTrait(entity, EntityTrait::Drawable))
         {
-            if (entity.drawCommand->shader == ShaderType::Basic)
+            if (getShaderVariableInt(*entity.drawCommand, "shaderTraits") & (i32)ShaderTrait::Shaded)
             {
                 if (lightSource)
                     setShaderVariableVec4(*entity.drawCommand, "lightColor", lightColor);
@@ -240,35 +266,50 @@ void gameInit(Context& ctx)
 
     onResize(ctx);
 
-    gameState->grid = createDrawable(ctx.render, GeneratedMesh::Grid, ShaderType::Unlit);
-    setActive(*gameState->grid, false);
-    setColor(*gameState->grid, vec4(0.5, 0.5, 0.5, 1));
+    // createGrid(ctx.render);
 
     // light
     auto light = createLight(ctx.render, LightType::Point);
     setLocalPosition(*light, vec3(10, 20, 10));
 
-    for (int i = 0; i < WORLD_CREATURES_COUNT; ++i)
+    std::mt19937 rng(World::SEED);
+    std::uniform_real_distribution<float> foodPosX(-10.f, 10.f);
+    std::uniform_real_distribution<float> foodPosY(-10.f, 10.f);
+    std::uniform_real_distribution<float> creatureColor(0.f, 1.f);
+
+    for (int i = 0; i < World::CREATURES_COUNT; ++i)
     {
-        const auto entity = createDrawable(ctx.render, GeneratedMesh::Quad, ShaderType::Unlit);
-        gameState->world.creatures[i] = entity;
+        const auto entity = createDrawable(ctx.render, GeneratedMesh::Quad);
+
+        auto& cmd = *entity->drawCommand;
+        cmd.shaderTraits |= ShaderTrait::Circle;
+
         setLocalPosition(*entity, {i + i * 0.2, 0, 0});
-        setColor(*entity, {1, 1, 0, 1});
+        setColor(*entity, {creatureColor(rng), creatureColor(rng), creatureColor(rng), 1});
         setLocalScale(*entity, {0.3f, 0.3f, 0.3f});
+
         entity->name = strL("creature");
         entity->creatureSpeed = 0.1f;
         entity->traits |= EntityTrait::Creature | EntityTrait::AABB;
+
+        gameState->world.creatures[i] = entity;
     }
 
-    for (int i = 0; i < WORLD_FOOD_COUNT; ++i)
+    for (int i = 0; i < World::FOOD_COUNT; ++i)
     {
-        const auto entity = createDrawable(ctx.render, GeneratedMesh::Quad, ShaderType::Unlit);
-        gameState->world.food[i] = entity;
-        setLocalPosition(*entity, {i + i * 0.2, -1, 0});
+        const auto entity = createDrawable(ctx.render, GeneratedMesh::Triangle);
+
+        setLocalPosition(*entity, {foodPosX(rng), foodPosY(rng), 0});
+
         setColor(*entity, {1, 0, 0, 1});
         setLocalScale(*entity, {0.15f, 0.15f, 0.16f});
-        entity->name = strL("food");
+
+        char name[256]{};
+        sprintf(name, "food_%i", i);
+        entity->name = strClone(name, ctx.gameMemory);
         entity->traits |= EntityTrait::Food | EntityTrait::AABB;
+
+        gameState->world.food[i] = entity;
     }
 
     if (!ctx.isGameLoaded)
@@ -289,6 +330,8 @@ void gamePostHotReload(Context& ctx)
 
 void cameraControllerMoveAndRotate(float dt, CameraController& controller, vec2 screenSize, Array<Entity> entities)
 {
+    controller.isMoving = false;
+
     controller.speed = CameraController::DEFAULT_SPEED;
     if (isKeyPressed(KeyboardKey::KEY_SHIFT))
         controller.speed *= 10.f;
@@ -298,26 +341,32 @@ void cameraControllerMoveAndRotate(float dt, CameraController& controller, vec2 
         if (isKeyPressed(KeyboardKey::KEY_Q))
         {
             addLocalPosition(*controller.camera, getUpVector(*controller.camera) * dt * -controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_E))
         {
             addLocalPosition(*controller.camera, getUpVector(*controller.camera) * dt * controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_D))
         {
             addLocalPosition(*controller.camera, getRightVector(*controller.camera) * dt * controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_A))
         {
             addLocalPosition(*controller.camera, getRightVector(*controller.camera) * dt * -controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_W))
         {
             addLocalPosition(*controller.camera, getForwardVector(*controller.camera) * dt * controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_S))
         {
             addLocalPosition(*controller.camera, getForwardVector(*controller.camera) * dt * -controller.speed);
+            controller.isMoving = true;
         }
     }
     else
@@ -325,29 +374,35 @@ void cameraControllerMoveAndRotate(float dt, CameraController& controller, vec2 
         if (isKeyPressed(KeyboardKey::KEY_Q))
         {
             addLocalPosition(*controller.camera, getUpVector(*controller.camera) * dt * -controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_E))
         {
             addLocalPosition(*controller.camera, getUpVector(*controller.camera) * dt * controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_D))
         {
             addLocalPosition(*controller.camera, getRightVector(*controller.camera) * dt * controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_A))
         {
             addLocalPosition(*controller.camera, getRightVector(*controller.camera) * dt * -controller.speed);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_W))
         {
             controller.camera->orthoSize -= dt * controller.speed;
             controller.camera->orthoSize = std::max(controller.camera->orthoSize, 0.001f);
             calculateCameraProjection(*controller.camera, screenSize, entities);
+            controller.isMoving = true;
         }
         if (isKeyPressed(KeyboardKey::KEY_S))
         {
             controller.camera->orthoSize += dt * controller.speed;
             calculateCameraProjection(*controller.camera, screenSize, entities);
+            controller.isMoving = true;
         }
 
         return;
@@ -526,7 +581,18 @@ void guiEntityContents(Context& ctx, Entity& entity)
 
     if (entityHasTrait(entity, EntityTrait::Drawable))
     {
-        ImGui::Text("shader: %s", (entity.drawCommand->shader == ShaderType::Basic) ? "basic" : "unlit");
+        if (ImGui::CheckboxFlags("shaded", (int*)&entity.drawCommand->shaderTraits, (int)ShaderTrait::Shaded))
+        {
+        }  // value updated by CheckboxFlags
+        ImGui::SameLine();
+        if (ImGui::CheckboxFlags("textured", (int*)&entity.drawCommand->shaderTraits, (int)ShaderTrait::Textured))
+        {
+        }
+        ImGui::SameLine();
+        if (ImGui::CheckboxFlags("circle", (int*)&entity.drawCommand->shaderTraits, (int)ShaderTrait::Circle))
+        {
+        }
+
         auto color = getShaderVariableVec4(*entity.drawCommand, "objectColor");
         if (ImGui::ColorEdit4("color", &color.x))
         {
@@ -660,7 +726,7 @@ void onGui(Context& ctx)
     const auto gameState = (GameState*)ctx.gameState;
 
     ImGui::SetNextWindowPos({});
-    ImGui::Begin("universe");
+    ImGui::Begin("hierarchy");
 
     ImGui::Text("pause: %s", gameState->pause ? "true" : "false");
     ImGui::SetNextItemWidth(GUI_SLIDER_WIDTH);
@@ -688,14 +754,74 @@ void onGui(Context& ctx)
         ImGui::EndTable();
     }
 
+    ImGui::End();
+
     if (ctx.gui.selectedEntity)
     {
+        ImGui::Begin("inspector");
         guiEntityContents(ctx, *(Entity*)ctx.gui.selectedEntity);
+        ImGui::End();
     }
+}
 
-    ImGui::Separator();
+void simulateCreatures(World& world, float dt)
+{
+    for (auto& creature : world.creatures)
+    {
+        Entity* closestFood = nullptr;
+        for (auto& thisFood : world.food)
+        {
+            const auto isClosestFoodValid = closestFood && isActive(*closestFood);
+            const auto isThisFoodValid = thisFood && isActive(*thisFood);
 
-    ImGui::End();
+            if (!isThisFoodValid)
+                continue;
+
+            if (isClosestFoodValid)
+            {
+                const auto isThisFoodCloser = distance(thisFood->worldPosition, creature->worldPosition) <
+                                              distance(closestFood->worldPosition, creature->worldPosition);
+                if (isThisFoodCloser)
+                {
+                    closestFood = thisFood;
+                }
+            }
+            else
+            {
+                closestFood = thisFood;
+            }
+        }
+
+        if (closestFood)
+        {
+            const auto dir = direction(creature->worldPosition, closestFood->worldPosition);
+
+            if (creature->creatureSpeed > 30.f)
+            {
+                for (auto speed = creature->creatureSpeed; speed > 0.f; speed *= 0.5f)
+                {
+                    addWorldPosition(*creature, dir * speed * dt);
+                    if (isColliding(*creature, *closestFood))
+                    {
+                        setActive(*closestFood, false);
+                        creature->creatureSpeed += 0.05f;
+                        creature->creatureSpeed = std::min(15.f, creature->creatureSpeed);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                addWorldPosition(*creature, dir * creature->creatureSpeed * dt);
+                if (isColliding(*creature, *closestFood))
+                {
+                    setActive(*closestFood, false);
+                    creature->creatureSpeed += 0.05f;
+                    creature->creatureSpeed = std::min(15.f, creature->creatureSpeed);
+                }
+            }
+        }
+    }
 }
 
 void gameUpdateAndRender(Context& ctx)
@@ -731,44 +857,7 @@ void gameUpdateAndRender(Context& ctx)
         gameState->cameraController.pitchYawTarget = camera.euler;
     }
 
-    for (auto& creature : gameState->world.creatures)
-    {
-        Entity* closestFood = nullptr;
-        for (auto& thisFood : gameState->world.food)
-        {
-            const auto isClosestFoodValid = closestFood && isActive(*closestFood);
-            const auto isThisFoodValid = thisFood && isActive(*thisFood);
-
-            if (!isThisFoodValid)
-                continue;
-
-            if (isClosestFoodValid)
-            {
-                const auto isThisFoodCloser = distance(thisFood->worldPosition, creature->worldPosition) <
-                                              distance(closestFood->worldPosition, creature->worldPosition);
-                if (isThisFoodCloser)
-                {
-                    closestFood = thisFood;
-                }
-            }
-            else
-            {
-                closestFood = thisFood;
-            }
-        }
-
-        if (closestFood)
-        {
-            const auto dir = direction(creature->worldPosition, closestFood->worldPosition);
-            addWorldPosition(*creature, dir * creature->creatureSpeed * dt);
-
-            if (isColliding(*creature, *closestFood))
-            {
-                setActive(*closestFood, false);
-                setLocalScale(*creature, creature->scale + 0.05f);
-            }
-        }
-    }
+    simulateCreatures(gameState->world, dt);
 
     cameraControllerUpdate(unscaledDt, ctx.input, gameState->cameraController, ctx.render.screenSize, ctx.entityManager.entities);
 
@@ -780,9 +869,9 @@ void gameUpdateAndRender(Context& ctx)
 
     static vec4 clearColor{1, 1, 1, 1};
     renderClearAndResize(ctx.render, clearColor);
-    for (const auto& command : ctx.render.drawCommands)
+    for (auto& command : ctx.render.drawCommands)
         renderDraw(command);
-    guiDraw();
+    guiDraw(gameState->cameraController.isMoving ? 0.1f : 1.f, unscaledDt);
     renderPresent();
 
     for (auto& kb : ctx.input.keyboard)

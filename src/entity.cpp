@@ -36,8 +36,7 @@ static void updateShaderMVP(Entity& entity, Entity& camera)
 
     ENSURE(entity.drawCommand != nullptr);
 
-    if (entity.drawCommand->shader == ShaderType::Basic)
-        setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
+    setShaderVariableMat4(*entity.drawCommand, "world", transpose(model));
 
     if (entityHasTrait(entity, EntityTrait::Skybox))
     {
@@ -131,8 +130,7 @@ void updateTransform(Entity& entity)
             if (entityHasTrait(drawable, EntityTrait::Drawable))
             {
                 ENSURE(drawable.drawCommand != nullptr);
-                if (drawable.drawCommand->shader == ShaderType::Basic)
-                    setShaderVariableVec3(*drawable.drawCommand, "lightPosition", entity.worldPosition);
+                setShaderVariableVec3(*drawable.drawCommand, "lightPosition", entity.worldPosition);
             }
         }
     }
@@ -347,7 +345,7 @@ void setColor(Entity& entity, vec4 color)
         setShaderVariableVec4(*entity.drawCommand, "lightColor", color);
         for (auto& other : g_context->entityManager.entities)
         {
-            if (entityHasTrait(other, EntityTrait::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+            if (entityHasTrait(other, EntityTrait::Drawable))
                 setShaderVariableVec4(*other.drawCommand, "lightColor", color);
         }
     }
@@ -362,7 +360,7 @@ void setLightType(Entity& light, LightType type)
 
     for (auto& other : g_context->entityManager.entities)
     {
-        if (entityHasTrait(other, EntityTrait::Drawable) && other.drawCommand->shader == ShaderType::Basic)
+        if (entityHasTrait(other, EntityTrait::Drawable))
             setShaderVariableInt(*other.drawCommand, "lightType", (i32)type);
     }
 }
@@ -376,7 +374,7 @@ void setLightDirection(Entity& light, vec3 direction)
 
     for (const auto& entity : g_context->entityManager.entities)
     {
-        if (entityHasTrait(entity, EntityTrait::Drawable) && entity.drawCommand->shader == ShaderType::Basic)
+        if (entityHasTrait(entity, EntityTrait::Drawable))
         {
             setShaderVariableVec3(*entity.drawCommand, "lightDirection", light.lightDirection);
         }
@@ -407,9 +405,9 @@ void setEntityFlag(Entity& entity, EntityFlag flag)
             if (entity.drawCommand)
             {
                 if (isSet)
-                    entity.drawCommand->flags |= DrawFlag::Active;
+                    entity.drawCommand->drawFlags |= DrawFlag::Active;
                 else
-                    entity.drawCommand->flags &= ~(DrawFlag::Active);
+                    entity.drawCommand->drawFlags &= ~(DrawFlag::Active);
             }
 
             if (entityHasTrait(entity, EntityTrait::Light))
@@ -441,6 +439,7 @@ bool isActive(Entity& entity)
 void setTexture(Entity& entity, size_t slot, Texture& texture)
 {
     ENSURE(entityHasTrait(entity, EntityTrait::Drawable) && entity.drawCommand && slot < MAX_TEXTURE_SLOTS);
+    entity.drawCommand->shaderTraits |= ShaderTrait::Textured;
     entity.drawCommand->textures[slot] = &texture;
 }
 

@@ -26,11 +26,15 @@ DEFINE_ENUM_BITWISE_OPERATORS(DrawFlag);
 static constexpr auto MAX_TEXTURE_SLOTS = 5;
 struct DrawCommand
 {
-    DrawFlag flags;
+    DrawFlag drawFlags;
     Culling culling;
+
     Mesh* mesh;
-    ShaderType shader;
-    ShaderVariable variables[MAX_SHADER_VARIABLES];
+
+    ShaderType shaderType;
+    ShaderTrait shaderTraits;
+    ShaderVariable shaderVariables[MAX_SHADER_VARIABLES];
+
     Texture* textures[MAX_TEXTURE_SLOTS];
 };
 
@@ -90,29 +94,20 @@ void renderDeinit();
 
 void createShaderVariables(DrawCommand& command);
 
-inline DrawCommand* pushDrawCmd(RenderState& state, Mesh& mesh, ShaderType shader = ShaderType::Basic)
+inline DrawCommand* pushDrawCmd(RenderState& state, Mesh& mesh)
 {
     DrawCommand cmd = {};
-    cmd.flags = DrawFlag::Active | DrawFlag::DepthWrite;
-    cmd.culling = Culling::Back;
-    cmd.shader = shader;
-    cmd.mesh = &mesh;
 
-    if (&mesh == &state.generatedMeshes[(i32)GeneratedMesh::Grid])
-    {
-        cmd.flags |= DrawFlag::Wireframe;
-        cmd.culling = Culling::None;
-    }
-    else if (shader == ShaderType::Skybox)
-    {
-        cmd.culling = Culling::Front;
-        cmd.flags &= ~(DrawFlag::DepthWrite);
-    }
+    cmd.drawFlags = DrawFlag::Active | DrawFlag::DepthWrite;
+    cmd.culling = Culling::Back;
+    cmd.shaderType = ShaderType::Default;
+    cmd.shaderTraits = ShaderTrait::None;
+    cmd.mesh = &mesh;
 
     createShaderVariables(cmd);
     return arrayPush(state.drawCommands, cmd);
 }
 
 void renderClearAndResize(RenderState& state, glm::vec4 color);
-void renderDraw(DrawCommand const& command);
+void renderDraw(DrawCommand& command);
 void renderPresent();

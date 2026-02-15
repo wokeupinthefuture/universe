@@ -17,19 +17,27 @@ vec3 getShaderVariableVec3(DrawCommand& command, const char* variableName);
 vec4 getShaderVariableVec4(DrawCommand& command, const char* variableName);
 mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName);
 
+static constexpr const wchar_t* SHADER_PATH[] = {
+    L"resources/shaders/dx11/default.hlsl",
+    L"resources/shaders/dx11/skybox.hlsl",
+};
+
 enum class ShaderType
 {
-    Basic,
-    Unlit,
+    Default,
     Skybox,
     Max
 };
 
-static constexpr const wchar_t* SHADER_PATH[] = {
-    L"resources/shaders/dx11/basic.hlsl",
-    L"resources/shaders/dx11/unlit.hlsl",
-    L"resources/shaders/dx11/skybox.hlsl",
+enum class ShaderTrait
+{
+    None = 0,
+    Shaded = BIT(0),
+    Textured = BIT(1),
+    Circle = BIT(2),
 };
+
+DEFINE_ENUM_BITWISE_OPERATORS(ShaderTrait);
 
 static constexpr auto MAX_SHADER_VARIABLES = 10;
 
@@ -63,7 +71,8 @@ struct Variables
     float lightPosition[3];
     float time;
     int lightType;
-    float _padding1[3];
+    int shaderTraits;
+    float _padding1[2];
 };
 
 static_assert(sizeof(Variables) % 16 == 0, "Constant buffer size must be a multiple of 16 bytes");
@@ -78,6 +87,7 @@ static constexpr Variables DEFAULT_VARIABLES = {
     .lightPosition = {},
     .time = 0.f,
     .lightType = 0,
+    .shaderTraits = 0,
     ._padding1 = {},
 };
 

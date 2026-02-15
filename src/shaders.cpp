@@ -18,7 +18,7 @@ static ShaderVariable* getVariableByName(ShaderVariable* variables, const char* 
 
 void setShaderVariableInt(DrawCommand& command, const char* variableName, int value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.i = value;
     var->value = newValue;
@@ -26,7 +26,7 @@ void setShaderVariableInt(DrawCommand& command, const char* variableName, int va
 
 void setShaderVariableFloat(DrawCommand& command, const char* variableName, float value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.f = value;
     var->value = newValue;
@@ -34,7 +34,7 @@ void setShaderVariableFloat(DrawCommand& command, const char* variableName, floa
 
 void setShaderVariableVec2(DrawCommand& command, const char* variableName, vec2 value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.v2 = value;
     var->value = newValue;
@@ -42,7 +42,7 @@ void setShaderVariableVec2(DrawCommand& command, const char* variableName, vec2 
 
 void setShaderVariableVec3(DrawCommand& command, const char* variableName, vec3 value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.v3 = value;
     var->value = newValue;
@@ -50,7 +50,7 @@ void setShaderVariableVec3(DrawCommand& command, const char* variableName, vec3 
 
 void setShaderVariableVec4(DrawCommand& command, const char* variableName, vec4 value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.v4 = value;
     var->value = newValue;
@@ -58,43 +58,43 @@ void setShaderVariableVec4(DrawCommand& command, const char* variableName, vec4 
 
 void setShaderVariableMat4(DrawCommand& command, const char* variableName, mat4 value)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     ShaderVariableValue newValue;
     newValue.m4 = value;
     var->value = newValue;
 }
 float getShaderVariableFloat(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.f;
 }
 
 i32 getShaderVariableInt(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.i;
 }
 
 vec2 getShaderVariableVec2(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.v2;
 }
 
 vec3 getShaderVariableVec3(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.v3;
 }
 
 vec4 getShaderVariableVec4(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.v4;
 }
 
 mat4 getShaderVariableMat4(DrawCommand& command, const char* variableName)
 {
-    auto var = getVariableByName(command.variables, variableName);
+    auto var = getVariableByName(command.shaderVariables, variableName);
     return var->value.m4;
 }

@@ -8,4 +8,5 @@ cbuffer Variables : register(b0)
     float3 v_lightPosition;
     float v_time;
     int v_lightType;
+    int v_shaderTraits;
 }

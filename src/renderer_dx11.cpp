@@ -562,6 +562,7 @@ void renderInit(RenderState& state, void* window)
             createFieldMapping(Shaders::Variables, lightDirection, &Shaders::DEFAULT_VARIABLES.lightDirection),
             createFieldMapping(Shaders::Variables, lightColor, &Shaders::DEFAULT_VARIABLES.lightColor),
             createFieldMapping(Shaders::Variables, lightType, &Shaders::DEFAULT_VARIABLES.lightType),
+            createFieldMapping(Shaders::Variables, shaderTraits, &Shaders::DEFAULT_VARIABLES.shaderTraits),
         }};
 
     s_rasterizerStates[(size_t)RasterizerState::SolidCullBack] = createRasterizerState(false, Culling::Back);
@@ -649,17 +650,19 @@ static void writeShaderVariables(ShaderType shader, const ShaderVariable* variab
     s_deviceContext->PSSetConstantBuffers(0, 1, buffer.buffer.GetAddressOf());
 }
 
-void renderDraw(DrawCommand const& command)
+void renderDraw(DrawCommand& command)
 {
-    if (!bool(command.flags & DrawFlag::Active))
+    if (!bool(command.drawFlags & DrawFlag::Active))
         return;
 
     ENSURE(command.mesh != nullptr);
 
-    writeShaderVariables(command.shader, command.variables, MAX_SHADER_VARIABLES);
+    setShaderVariableInt(command, "shaderTraits", (int)command.shaderTraits);
+    writeShaderVariables(command.shaderType, command.shaderVariables, MAX_SHADER_VARIABLES);
 
-    s_deviceContext->IASetPrimitiveTopology(
-        bool(command.flags & DrawFlag::Wireframe) ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    s_deviceContext->IASetPrimitiveTopology(bool(command.drawFlags & DrawFlag::Wireframe)
+                                                ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+                                                : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     s_deviceContext->PSSetSamplers(0, 1, &s_textureSampler);
 
@@ -673,7 +676,7 @@ void renderDraw(DrawCommand const& command)
         s_deviceContext->PSSetShaderResources(i, 1, &s_textureViews[texture->gpuTextureId]);
     }
 
-    auto& shader = s_shaders[(i32)command.shader];
+    auto& shader = s_shaders[(i32)command.shaderType];
     s_deviceContext->IASetInputLayout(shader.layout.Get());
     s_deviceContext->VSSetShader(shader.vs.Get(), nullptr, 0);
     s_deviceContext->PSSetShader(shader.ps.Get(), nullptr, 0);
@@ -692,14 +695,14 @@ void renderDraw(DrawCommand const& command)
         }
         case Culling::None:
         {
-            ENSURE(bool(command.flags & DrawFlag::Wireframe));
+            ENSURE(bool(command.drawFlags & DrawFlag::Wireframe));
             s_deviceContext->RSSetState(s_rasterizerStates[(size_t)RasterizerState::WireframeCullNone].Get());
             break;
         }
         default: LOGIC_ERROR();
     }
 
-    if (bool(command.flags & DrawFlag::DepthWrite))
+    if (bool(command.drawFlags & DrawFlag::DepthWrite))
     {
         s_deviceContext->OMSetDepthStencilState(s_depthStencilDefault, 0);
     }
@@ -760,10 +763,10 @@ void createShaderVariables(DrawCommand& command)
     for (int i = 0; i < MAX_SHADER_VARIABLES; ++i)
     {
         auto& mapping = s_constantBuffers.mappings[i];
-        command.variables[i] = {
+        command.shaderVariables[i] = {
             .name = mapping.name,
             .value = {},
         };
-        memcpy(&command.variables[i].value, &mapping.defaultValue, mapping.sizeBytes);
+        memcpy(&command.shaderVariables[i].value, &mapping.defaultValue, mapping.sizeBytes);
     }
 }

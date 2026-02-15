@@ -4,7 +4,7 @@
 
 void guiInit(void** outWindowEventCallback, void* window, float dpi);
 void guiBegin();
-void guiDraw();
+void guiDraw(float alphaTarget, float dt);
 void guiDeinit();
 bool guiIsCapturingMouse();
 bool guiIsCapturingKeyboard();

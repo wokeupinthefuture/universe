@@ -35,8 +35,12 @@ void guiBegin()
     ImGui::NewFrame();
 }
 
-void guiDraw()
+void guiDraw(float alphaTarget, float dt)
 {
+    static float alpha = 1.f;
+    alpha = lerp(alpha, alphaTarget, min(5.f * dt, 1.f));
+    ImGui::GetStyle().Alpha = alpha;
+
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }

@@ -2,11 +2,12 @@
 #include "../entity.hpp"
 #include "../physics.hpp"
 
-const i32 WORLD_CREATURES_COUNT = 1;
-const i32 WORLD_FOOD_COUNT = 100;
-
 struct World
 {
-    Entity* creatures[WORLD_CREATURES_COUNT]{};
-    Entity* food[WORLD_FOOD_COUNT]{};
+    static constexpr auto CREATURES_COUNT = 2;
+    static constexpr auto FOOD_COUNT = 250;
+    static constexpr auto SEED = 123;
+
+    Entity* creatures[CREATURES_COUNT]{};
+    Entity* food[FOOD_COUNT]{};
 };
