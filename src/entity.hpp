@@ -13,8 +13,6 @@ enum class EntityTrait
     Light = BIT(3),
     Skybox = BIT(4),
     AABB = BIT(5),
-    Creature = BIT(6),
-    Food = BIT(7)
 };
 
 DEFINE_ENUM_BITWISE_OPERATORS(EntityTrait)
@@ -83,7 +81,8 @@ struct Entity
     LightType lightType;
 
     // game logic
-    float creatureSpeed;
+    float speed;
+    vec3 projectileDirection;
 
     // gui
     bool guiIsLocal;

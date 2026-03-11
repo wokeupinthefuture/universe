@@ -4,10 +4,13 @@
 
 struct World
 {
-    static constexpr auto CREATURES_COUNT = 2;
+    static constexpr auto ENEMIES_COUNT = 2;
+    // static constexpr auto PLAYER_PROJECTILES_COUNT = 100;
     static constexpr auto FOOD_COUNT = 250;
     static constexpr auto SEED = 123;
 
-    Entity* creatures[CREATURES_COUNT]{};
+    Entity* player{};
+    // Entity* playerProjectiles[PLAYER_PROJECTILES_COUNT]{};
+    Entity* enemies[ENEMIES_COUNT]{};
     Entity* food[FOOD_COUNT]{};
 };

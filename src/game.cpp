@@ -19,13 +19,23 @@
 #include "imgui.h"
 #include <random>
 
+enum class CameraStrategy
+{
+    FreeLook,
+    FollowPlayer,
+};
+
 struct CameraController
 {
     static constexpr auto PITCH_YAW_SMOOTHING = 30.f;
     static constexpr auto DEFAULT_SPEED = 5.f;
     static constexpr auto USE_PRESSED_MODE = false;
+    static constexpr auto FOLLOW_SMOOTHING = 8.f;
+
+    CameraStrategy strategy;
 
     Entity* camera;
+    Entity* target;
 
     bool isPressed;
     vec2 pressedPos;
@@ -53,7 +63,7 @@ struct GameState
     World world;
 };
 
-void simulateCreatures(World& world, float dt);
+void gameUpdateWorld(World& world, float dt);
 
 Entity defaultEntity()
 {
@@ -187,6 +197,7 @@ void focusCameraOnEntity(Entity& camera, Entity& target)
 void cameraControllerInit(CameraController& controller, Entity& camera)
 {
     controller = {};
+    controller.strategy = CameraStrategy::FollowPlayer;
     controller.camera = &camera;
     controller.speed = 1.f;
     controller.sensitivity = 5.f;
@@ -241,7 +252,10 @@ void gameInit(Context& ctx)
 
     defer({
         if (!ctx.isGameLoaded)
+        {
             cameraControllerInit(gameState->cameraController, ctx.entityManager.camera);
+            gameState->cameraController.target = gameState->world.player;
+        }
 
         createSkybox(ctx.render, strL("skybox"));
 
@@ -275,24 +289,50 @@ void gameInit(Context& ctx)
     std::mt19937 rng(World::SEED);
     std::uniform_real_distribution<float> foodPosX(-10.f, 10.f);
     std::uniform_real_distribution<float> foodPosY(-10.f, 10.f);
-    std::uniform_real_distribution<float> creatureColor(0.f, 1.f);
 
-    for (int i = 0; i < World::CREATURES_COUNT; ++i)
+    const auto player = createDrawable(ctx.render, GeneratedMesh::Quad);
+
+    player->drawCommand->shaderTraits |= ShaderTrait::Circle;
+
+    setLocalPosition(*player, {});
+    setColor(*player, vec4(0, 1, 1, 1));
+    player->name = strL("player");
+    player->speed = 0.01f;
+    player->traits |= EntityTrait::AABB;
+
+    gameState->world.player = player;
+
+    // for (int i = 0; i < World::PLAYER_PROJECTILES_COUNT; ++i)
+    // {
+    //     const auto entity = createDrawable(ctx.render, GeneratedMesh::Quad);
+    //
+    //     entity->drawCommand->shaderTraits |= ShaderTrait::Circle;
+    //
+    //     setLocalPosition(*entity, {i + i * 0.2, 0, 0});
+    //     setColor(*entity, {1, 1, 1, 1});
+    //     setLocalScale(*entity, {0.2f, 0.2f, 0.2f});
+    //
+    //     entity->name = strL("projectile");
+    //     entity->traits |= EntityTrait::AABB;
+    //
+    //     setActive(*entity, false);
+    //
+    //     gameState->world.playerProjectiles[i] = entity;
+    // }
+
+    for (int i = 0; i < World::ENEMIES_COUNT; ++i)
     {
         const auto entity = createDrawable(ctx.render, GeneratedMesh::Quad);
 
-        auto& cmd = *entity->drawCommand;
-        cmd.shaderTraits |= ShaderTrait::Circle;
-
         setLocalPosition(*entity, {i + i * 0.2, 0, 0});
-        setColor(*entity, {creatureColor(rng), creatureColor(rng), creatureColor(rng), 1});
+        setColor(*entity, {1, 0, 0, 1});
         setLocalScale(*entity, {0.3f, 0.3f, 0.3f});
 
         entity->name = strL("creature");
-        entity->creatureSpeed = 0.1f;
-        entity->traits |= EntityTrait::Creature | EntityTrait::AABB;
+        entity->speed = 0.1f;
+        entity->traits |= EntityTrait::AABB;
 
-        gameState->world.creatures[i] = entity;
+        gameState->world.enemies[i] = entity;
     }
 
     for (int i = 0; i < World::FOOD_COUNT; ++i)
@@ -301,13 +341,13 @@ void gameInit(Context& ctx)
 
         setLocalPosition(*entity, {foodPosX(rng), foodPosY(rng), 0});
 
-        setColor(*entity, {1, 0, 0, 1});
+        setColor(*entity, {0, 1, 0, 1});
         setLocalScale(*entity, {0.15f, 0.15f, 0.16f});
 
         char name[256]{};
         sprintf(name, "food_%i", i);
         entity->name = strClone(name, ctx.gameMemory);
-        entity->traits |= EntityTrait::Food | EntityTrait::AABB;
+        entity->traits |= EntityTrait::AABB;
 
         gameState->world.food[i] = entity;
     }
@@ -415,11 +455,22 @@ void cameraControllerMoveAndRotate(float dt, CameraController& controller, vec2 
     controller.pitchYawDelta = {};
 }
 
-void cameraControllerUpdate(float dt, InputState& input, CameraController& controller, vec2 screenSize, Array<Entity> entities)
+void cameraControllerFollowPlayer(float dt, CameraController& controller)
 {
-    if (guiIsCapturingKeyboard() || guiIsCapturingMouse())
+    if (!controller.target)
         return;
 
+    controller.isMoving = false;
+
+    vec3 camPos = controller.camera->position;
+    vec3 targetPos = controller.target->worldPosition;
+    vec3 desired = vec3(targetPos.x, targetPos.y, camPos.z);
+    vec3 smoothed = lerp(camPos, desired, min(CameraController::FOLLOW_SMOOTHING * dt, 1.f));
+    setLocalPosition(*controller.camera, smoothed);
+}
+
+void cameraControllerFreeLook(float dt, InputState& input, CameraController& controller, vec2 screenSize, Array<Entity> entities)
+{
     const auto mouseDelta = vec3{-input.mouse.delta.y, -input.mouse.delta.x, 0};
 
     if constexpr (CameraController::USE_PRESSED_MODE)
@@ -449,6 +500,24 @@ void cameraControllerUpdate(float dt, InputState& input, CameraController& contr
     else
     {
         cameraControllerMoveAndRotate(dt, controller, screenSize, entities);
+    }
+}
+
+void cameraControllerUpdate(float dt, InputState& input, CameraController& controller, vec2 screenSize, Array<Entity> entities)
+{
+    if (guiIsCapturingKeyboard() || guiIsCapturingMouse())
+        return;
+
+    if (wasKeyPressed(KeyboardKey::KEY_TAB))
+    {
+        controller.strategy =
+            controller.strategy == CameraStrategy::FreeLook ? CameraStrategy::FollowPlayer : CameraStrategy::FreeLook;
+    }
+
+    switch (controller.strategy)
+    {
+        case CameraStrategy::FreeLook: cameraControllerFreeLook(dt, input, controller, screenSize, entities); break;
+        case CameraStrategy::FollowPlayer: cameraControllerFollowPlayer(dt, controller); break;
     }
 }
 
@@ -764,10 +833,20 @@ void onGui(Context& ctx)
     }
 }
 
-void simulateCreatures(World& world, float dt)
+void gameUpdateWorld(World& world, float dt)
 {
-    for (auto& creature : world.creatures)
+    // for (const auto& projectile : world.playerProjectiles)
+    // {
+    //     if (!isActive(*projectile))
+    //         continue;
+    //     addWorldPosition(*projectile, projectile->projectileDirection * projectile->speed);
+    // }
+
+    for (auto& enemy : world.enemies)
     {
+        if (!isActive(*enemy))
+            continue;
+
         Entity* closestFood = nullptr;
         for (auto& thisFood : world.food)
         {
@@ -779,8 +858,8 @@ void simulateCreatures(World& world, float dt)
 
             if (isClosestFoodValid)
             {
-                const auto isThisFoodCloser = distance(thisFood->worldPosition, creature->worldPosition) <
-                                              distance(closestFood->worldPosition, creature->worldPosition);
+                const auto isThisFoodCloser = distance(thisFood->worldPosition, enemy->worldPosition) <
+                                              distance(closestFood->worldPosition, enemy->worldPosition);
                 if (isThisFoodCloser)
                 {
                     closestFood = thisFood;
@@ -794,34 +873,52 @@ void simulateCreatures(World& world, float dt)
 
         if (closestFood)
         {
-            const auto dir = direction(creature->worldPosition, closestFood->worldPosition);
-
-            if (creature->creatureSpeed > 30.f)
+            const auto dir = direction(enemy->worldPosition, closestFood->worldPosition);
+            if (enemy->speed > 30.f)
             {
-                for (auto speed = creature->creatureSpeed; speed > 0.f; speed *= 0.5f)
+                for (auto speed = enemy->speed; speed > 0.f; speed *= 0.5f)
                 {
-                    addWorldPosition(*creature, dir * speed * dt);
-                    if (isColliding(*creature, *closestFood))
+                    addWorldPosition(*enemy, dir * speed * dt);
+                    if (isColliding(*enemy, *closestFood))
                     {
                         setActive(*closestFood, false);
-                        creature->creatureSpeed += 0.05f;
-                        creature->creatureSpeed = std::min(15.f, creature->creatureSpeed);
+                        enemy->speed += 0.05f;
+                        enemy->speed = std::min(15.f, enemy->speed);
                         break;
                     }
                 }
             }
             else
             {
-                addWorldPosition(*creature, dir * creature->creatureSpeed * dt);
-                if (isColliding(*creature, *closestFood))
+                addWorldPosition(*enemy, dir * enemy->speed * dt);
+                if (isColliding(*enemy, *closestFood))
                 {
                     setActive(*closestFood, false);
-                    creature->creatureSpeed += 0.05f;
-                    creature->creatureSpeed = std::min(15.f, creature->creatureSpeed);
+                    enemy->speed += 0.05f;
+                    enemy->speed = std::min(15.f, enemy->speed);
                 }
             }
         }
+
+        // for (const auto& projectile : world.playerProjectiles)
+        // {
+        //     if (!isActive(*projectile))
+        //         continue;
+        //
+        //     if (isColliding(*projectile, *enemy))
+        //     {
+        //         setActive(*enemy, false);
+        //     }
+        // }
     }
+}
+
+void gameShootProjectile(Entity* projectile, Entity* shooter, vec3 direction, float speed)
+{
+    setWorldPosition(*projectile, shooter->worldPosition + direction);
+    setActive(*projectile, true);
+    projectile->projectileDirection = direction;
+    projectile->speed = speed;
 }
 
 void gameUpdateAndRender(Context& ctx)
@@ -857,7 +954,65 @@ void gameUpdateAndRender(Context& ctx)
         gameState->cameraController.pitchYawTarget = camera.euler;
     }
 
-    simulateCreatures(gameState->world, dt);
+    if (gameState->cameraController.strategy == CameraStrategy::FollowPlayer && !guiIsCapturingKeyboard())
+    {
+        auto player = gameState->world.player;
+        if (player)
+        {
+            vec3 move{};
+            if (isKeyPressed(KeyboardKey::KEY_W))
+                move.y += 1.f;
+            if (isKeyPressed(KeyboardKey::KEY_S))
+                move.y -= 1.f;
+            if (isKeyPressed(KeyboardKey::KEY_D))
+                move.x += 1.f;
+            if (isKeyPressed(KeyboardKey::KEY_A))
+                move.x -= 1.f;
+            if (glm::length(move) > 0.f)
+                addWorldPosition(*player, glm::normalize(move) * player->speed);
+        }
+    }
+
+    if (wasKeyPressed(KEY_SPACE))
+    {
+        // Entity* projectileToShoot = nullptr;
+        //
+        // for (auto& projectile : gameState->world.playerProjectiles)
+        // {
+        //     if (!isActive(*projectile))
+        //     {
+        //         projectileToShoot = projectile;
+        //         break;
+        //     }
+        // }
+        //
+        // if (!projectileToShoot)
+        // {
+        //     Entity* furthestProjectile = nullptr;
+        //     float furthestDistance = 0.f;
+        //     for (auto& projectile : gameState->world.playerProjectiles)
+        //     {
+        //         auto distanceToProjectile = distance(projectile->worldPosition, gameState->world.player->worldPosition);
+        //         if (distanceToProjectile > furthestDistance)
+        //         {
+        //             furthestDistance = distanceToProjectile;
+        //             furthestProjectile = projectile;
+        //         }
+        //     }
+        //
+        //     projectileToShoot = furthestProjectile;
+        // }
+        //
+        // const auto mouseWorldPoint = screenToWorldPoint(ctx.input.mouse.pos,
+        //     ctx.render.screenSize,
+        //     gameState->cameraController.camera->worldPosition.z,
+        //     glm::inverse(gameState->cameraController.camera->view),
+        //     glm::inverse(gameState->cameraController.camera->projection));
+        // vec3 shootDirection = direction(mouseWorldPoint, gameState->world.player->worldPosition);
+        // gameShootProjectile(projectileToShoot, gameState->world.player, shootDirection, 1.f);
+    }
+
+    gameUpdateWorld(gameState->world, dt);
 
     cameraControllerUpdate(unscaledDt, ctx.input, gameState->cameraController, ctx.render.screenSize, ctx.entityManager.entities);
 
